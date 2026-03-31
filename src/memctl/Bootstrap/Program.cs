@@ -120,6 +120,43 @@ addCmd.SetHandler(async ctx =>
 });
 root.AddCommand(addCmd);
 
+// --- add-turn ---
+var atChatOpt      = new Option<long>  ("--chat-id",   "Telegram chat ID")   { IsRequired = true };
+var atUserOpt      = new Option<long>  ("--user-id",   "Telegram user ID");
+var atFromOpt      = new Option<string>("--from",      "Display name")        { IsRequired = true };
+var atRoleOpt      = new Option<string>("--role",      "user | assistant")    { IsRequired = true };
+var atTextOpt      = new Option<string>("--text",      "Turn content")        { IsRequired = true };
+var atTsOpt        = new Option<string?>("--timestamp","ISO 8601 timestamp (default: now)");
+var atWriteOnlyOpt = new Option<bool>  ("--write-only","Write file only, skip indexing");
+var atCmd = new Command("add-turn", "Append a conversation turn and update vault index");
+atCmd.AddOption(atChatOpt); atCmd.AddOption(atUserOpt); atCmd.AddOption(atFromOpt);
+atCmd.AddOption(atRoleOpt); atCmd.AddOption(atTextOpt); atCmd.AddOption(atTsOpt);
+atCmd.AddOption(atWriteOnlyOpt);
+atCmd.SetHandler(async ctx =>
+{
+    var g         = G(ctx);
+    var pr        = ctx.ParseResult;
+    if (RequireVault(g, ctx) is not { } vault) return;
+    var writeOnly = pr.GetValueForOption(atWriteOnlyOpt);
+    var emb       = writeOnly ? null : await GetEmbedding(g);
+    var op        = new AddTurnOperator(vaultReader, noteIndex, emb);
+    DateTime? ts  = null;
+    var tsRaw     = pr.GetValueForOption(atTsOpt);
+    if (tsRaw != null) DateTime.TryParse(tsRaw, null, System.Globalization.DateTimeStyles.RoundtripKind, out var parsed);
+    var outcome   = op.Execute(
+        vault,
+        pr.GetValueForOption(atChatOpt),
+        pr.GetValueForOption(atUserOpt),
+        pr.GetValueForOption(atFromOpt)!,
+        pr.GetValueForOption(atRoleOpt)!,
+        pr.GetValueForOption(atTextOpt)!,
+        ts,
+        writeOnly);
+    ResultPrinter.Print(outcome);
+    ctx.ExitCode = outcome.Success ? 0 : 1;
+});
+root.AddCommand(atCmd);
+
 // --- get ---
 var getIdArg = new Argument<string>("id", "Note ID or file path");
 var getCmd   = new Command("get", "Get full note content by ID or path");
