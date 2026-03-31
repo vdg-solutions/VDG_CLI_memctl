@@ -3,10 +3,13 @@ using Memctl.CoreAbstractions.Ports;
 
 namespace Memctl.Operators;
 
-public sealed class GetOperator(INoteIndex index)
+public sealed class GetOperator(IVaultReader vaultReader, INoteIndex index)
 {
     public MemctlOutcome Execute(string vaultPath, string idOrPath)
     {
+        if (IngestOperator.NeedsIngest(vaultPath))
+            new IngestOperator(vaultReader, index, null).Execute(vaultPath);
+
         index.Initialize(IngestOperator.DbPath(vaultPath));
 
         var note = index.GetById(idOrPath)

@@ -57,10 +57,27 @@ public sealed class ObsidianVaultReader : IVaultReader
         Directory.CreateDirectory(vaultPath);
         Directory.CreateDirectory(Path.Combine(vaultPath, ".obsidian"));
         Directory.CreateDirectory(Path.Combine(vaultPath, ".memctl"));
+        Directory.CreateDirectory(Path.Combine(vaultPath, "chats"));
 
-        var appJson = Path.Combine(vaultPath, ".obsidian", "app.json");
-        if (!File.Exists(appJson))
-            File.WriteAllText(appJson, "{}");
+        WriteIfAbsent(Path.Combine(vaultPath, ".obsidian", "app.json"),        "{}");
+        WriteIfAbsent(Path.Combine(vaultPath, ".obsidian", "appearance.json"), "{}");
+        WriteIfAbsent(Path.Combine(vaultPath, ".obsidian", "community-plugins.json"),
+            """["dataview","calendar"]""");
+        WriteIfAbsent(Path.Combine(vaultPath, ".obsidian", "core-plugins.json"),
+            """{"daily-notes":true,"templates":true,"backlink":true,"outline":true,"word-count":true}""");
+        WriteIfAbsent(Path.Combine(vaultPath, ".obsidian", "daily-notes.json"),
+            """{"folder":"chats","format":"YYYY-MM-DD"}""");
+
+        // Placeholder so @/vault/claude-memory/MEMORY.md import doesn't fail on first session
+        Directory.CreateDirectory(Path.Combine(vaultPath, "claude-memory"));
+        WriteIfAbsent(Path.Combine(vaultPath, "claude-memory", "MEMORY.md"),
+            "---\ntype: user\n---\n\n");
+    }
+
+    private static void WriteIfAbsent(string path, string content)
+    {
+        if (!File.Exists(path))
+            File.WriteAllText(path, content, Encoding.UTF8);
     }
 
     public void WriteNote(Note note, string vaultPath, string? fileName = null)

@@ -3,10 +3,13 @@ using Memctl.CoreAbstractions.Ports;
 
 namespace Memctl.Operators;
 
-public sealed class SearchTextOperator(INoteIndex index)
+public sealed class SearchTextOperator(IVaultReader vaultReader, INoteIndex index)
 {
     public MemctlOutcome Execute(string vaultPath, string query, int limit)
     {
+        if (IngestOperator.NeedsIngest(vaultPath))
+            new IngestOperator(vaultReader, index, null).Execute(vaultPath);
+
         index.Initialize(IngestOperator.DbPath(vaultPath));
         var hits = index.SearchBm25(query, limit);
 

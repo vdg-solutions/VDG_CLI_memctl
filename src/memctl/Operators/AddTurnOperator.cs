@@ -17,10 +17,13 @@ public sealed class AddTurnOperator(IVaultReader vault, INoteIndex index, GemmaE
         DateTime? timestamp = null,
         bool     writeOnly  = false)
     {
+        // Auto-init vault on first use (idempotent — WriteIfAbsent guards all files)
+        vault.InitVaultStructure(vaultPath);
+
         var ts       = (timestamp ?? DateTime.UtcNow).ToLocalTime();
         var date     = DateOnly.FromDateTime(ts);
         var time     = ts.ToString("HH:mm");
-        var chatDir  = Path.Combine(vaultPath, chatId.ToString());
+        var chatDir  = Path.Combine(vaultPath, "chats", chatId.ToString());
         var filePath = Path.Combine(chatDir, $"{date:yyyy-MM-dd}.md");
 
         Directory.CreateDirectory(chatDir);
@@ -31,7 +34,8 @@ public sealed class AddTurnOperator(IVaultReader vault, INoteIndex index, GemmaE
             var sb = new StringBuilder();
             sb.AppendLine("---");
             sb.AppendLine($"id: {chatId}-{date:yyyy-MM-dd}");
-            sb.AppendLine($"title: {date:yyyy-MM-dd}");
+            sb.AppendLine($"title: Chat {chatId} — {date:yyyy-MM-dd}");
+            sb.AppendLine($"date: {date:yyyy-MM-dd}");
             sb.AppendLine($"created: {date:yyyy-MM-dd}");
             sb.AppendLine("tags:");
             sb.AppendLine("  - telegram");

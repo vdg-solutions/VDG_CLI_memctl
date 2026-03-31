@@ -3,10 +3,13 @@ using Memctl.CoreAbstractions.Ports;
 
 namespace Memctl.Operators;
 
-public sealed class SearchLinksOperator(INoteIndex index)
+public sealed class SearchLinksOperator(IVaultReader vaultReader, INoteIndex index)
 {
     public MemctlOutcome Execute(string vaultPath, string noteId, int depth)
     {
+        if (IngestOperator.NeedsIngest(vaultPath))
+            new IngestOperator(vaultReader, index, null).Execute(vaultPath);
+
         index.Initialize(IngestOperator.DbPath(vaultPath));
 
         var source = index.GetById(noteId) ?? index.GetByFilePath(noteId);

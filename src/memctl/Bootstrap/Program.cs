@@ -165,7 +165,7 @@ getCmd.SetHandler(ctx =>
 {
     var g = G(ctx);
     if (RequireVault(g, ctx) is not { } vault) return;
-    var op = new GetOperator(noteIndex);
+    var op = new GetOperator(vaultReader, noteIndex);
     var outcome = op.Execute(vault, ctx.ParseResult.GetValueForArgument(getIdArg));
     ResultPrinter.Print(outcome);
     ctx.ExitCode = outcome.Success ? 0 : 2;
@@ -180,7 +180,7 @@ listCmd.SetHandler(ctx =>
 {
     var g = G(ctx);
     if (RequireVault(g, ctx) is not { } vault) return;
-    var op = new ListOperator(noteIndex);
+    var op = new ListOperator(vaultReader, noteIndex);
     ResultPrinter.Print(op.Execute(vault, ctx.ParseResult.GetValueForOption(listTagOpt), g.Limit));
 });
 root.AddCommand(listCmd);
@@ -194,7 +194,7 @@ searchCmd.SetHandler(async ctx =>
     var g = G(ctx);
     if (RequireVault(g, ctx) is not { } vault) return;
     var emb = await GetEmbedding(g);
-    var op  = new SearchOperator(noteIndex, emb);
+    var op  = new SearchOperator(vaultReader, noteIndex, emb);
     ResultPrinter.Print(op.Execute(vault, ctx.ParseResult.GetValueForArgument(searchQueryArg), g.Limit));
 });
 root.AddCommand(searchCmd);
@@ -210,7 +210,7 @@ semCmd.SetHandler(async ctx =>
     var g = G(ctx);
     if (RequireVault(g, ctx) is not { } vault) return;
     var emb   = await GetEmbedding(g);
-    var op    = new SearchSemanticOperator(noteIndex, emb);
+    var op    = new SearchSemanticOperator(vaultReader, noteIndex, emb);
     var scope = ctx.ParseResult.GetValueForOption(semScopeOpt)
         ?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     ResultPrinter.Print(op.Execute(vault, ctx.ParseResult.GetValueForArgument(semQueryArg), g.Limit, scope));
@@ -225,7 +225,7 @@ stCmd.SetHandler(ctx =>
 {
     var g = G(ctx);
     if (RequireVault(g, ctx) is not { } vault) return;
-    var op = new SearchTextOperator(noteIndex);
+    var op = new SearchTextOperator(vaultReader, noteIndex);
     ResultPrinter.Print(op.Execute(vault, ctx.ParseResult.GetValueForArgument(stQueryArg), g.Limit));
 });
 root.AddCommand(stCmd);
@@ -240,7 +240,7 @@ sTagsCmd.SetHandler(ctx =>
 {
     var g = G(ctx);
     if (RequireVault(g, ctx) is not { } vault) return;
-    var op   = new SearchTagsOperator(noteIndex);
+    var op   = new SearchTagsOperator(vaultReader, noteIndex);
     var tags = ctx.ParseResult.GetValueForArgument(sTagsArg)
         .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     var matchAll = ctx.ParseResult.GetValueForOption(sTagsMatch) == "all";
@@ -258,7 +258,7 @@ slCmd.SetHandler(ctx =>
 {
     var g = G(ctx);
     if (RequireVault(g, ctx) is not { } vault) return;
-    var op = new SearchLinksOperator(noteIndex);
+    var op = new SearchLinksOperator(vaultReader, noteIndex);
     ResultPrinter.Print(op.Execute(vault,
         ctx.ParseResult.GetValueForArgument(slIdArg),
         ctx.ParseResult.GetValueForOption(slDepthOpt)));
@@ -275,7 +275,7 @@ sdCmd.SetHandler(ctx =>
 {
     var g = G(ctx);
     if (RequireVault(g, ctx) is not { } vault) return;
-    var op = new SearchDateOperator(noteIndex);
+    var op = new SearchDateOperator(vaultReader, noteIndex);
     var pr = ctx.ParseResult;
     DateTime? from = pr.GetValueForOption(sdFromOpt) is { } fs ? DateTime.Parse(fs).ToUniversalTime() : null;
     DateTime? to   = pr.GetValueForOption(sdToOpt)   is { } ts ? DateTime.Parse(ts).ToUniversalTime() : null;
@@ -307,7 +307,7 @@ tagsCmd.SetHandler(ctx =>
 {
     var g = G(ctx);
     if (RequireVault(g, ctx) is not { } vault) return;
-    ResultPrinter.Print(new TagsOperator(noteIndex).Execute(vault));
+    ResultPrinter.Print(new TagsOperator(vaultReader, noteIndex).Execute(vault));
 });
 root.AddCommand(tagsCmd);
 
@@ -317,7 +317,7 @@ statsCmd.SetHandler(ctx =>
 {
     var g = G(ctx);
     if (RequireVault(g, ctx) is not { } vault) return;
-    ResultPrinter.Print(new StatsOperator(noteIndex).Execute(vault));
+    ResultPrinter.Print(new StatsOperator(vaultReader, noteIndex).Execute(vault));
 });
 root.AddCommand(statsCmd);
 

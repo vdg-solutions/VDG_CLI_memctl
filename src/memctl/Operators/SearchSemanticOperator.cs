@@ -4,10 +4,13 @@ using Memctl.Implementations.Embedding;
 
 namespace Memctl.Operators;
 
-public sealed class SearchSemanticOperator(INoteIndex index, GemmaEmbeddingEngine embedding)
+public sealed class SearchSemanticOperator(IVaultReader vaultReader, INoteIndex index, GemmaEmbeddingEngine embedding)
 {
     public MemctlOutcome Execute(string vaultPath, string query, int limit, string[]? scopeIds)
     {
+        if (IngestOperator.NeedsIngest(vaultPath))
+            new IngestOperator(vaultReader, index, embedding).Execute(vaultPath);
+
         index.Initialize(IngestOperator.DbPath(vaultPath));
 
         var mismatch = ModelGuard.Check(index, embedding, "search-semantic");

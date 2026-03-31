@@ -4,7 +4,7 @@ using Memctl.Implementations.Embedding;
 
 namespace Memctl.Operators;
 
-public sealed class IngestOperator(IVaultReader vault, INoteIndex index, GemmaEmbeddingEngine embedding)
+public sealed class IngestOperator(IVaultReader vault, INoteIndex index, GemmaEmbeddingEngine? embedding)
 {
     public MemctlOutcome Execute(string vaultPath)
     {
@@ -21,10 +21,13 @@ public sealed class IngestOperator(IVaultReader vault, INoteIndex index, GemmaEm
         {
             try
             {
-                var note      = vault.ParseNote(file, vaultPath);
-                var emb       = embedding.Embed($"{note.Title}\n{note.Content}");
-                var withEmbed = note with { Embedding = emb };
-                index.Upsert(withEmbed);
+                var note = vault.ParseNote(file, vaultPath);
+                if (embedding != null)
+                {
+                    var emb = embedding.Embed($"{note.Title}\n{note.Content}");
+                    note = note with { Embedding = emb };
+                }
+                index.Upsert(note);
                 added++;
             }
             catch (Exception ex)
@@ -33,12 +36,25 @@ public sealed class IngestOperator(IVaultReader vault, INoteIndex index, GemmaEm
             }
         }
 
-        // store model metadata for mismatch detection
-        index.SetMetadata("model_name", embedding.ModelName);
-        index.SetMetadata("model_dim",  embedding.Dim.ToString());
+        if (embedding != null)
+        {
+            // store model metadata for mismatch detection
+            index.SetMetadata("model_name", embedding.ModelName);
+            index.SetMetadata("model_dim",  embedding.Dim.ToString());
+        }
 
+        var model = embedding?.ModelName ?? "none";
         return MemctlOutcome.Ok("ingest", $"Indexed {added}/{files.Count} notes",
-            new { indexed = added, total = files.Count, vault = vaultPath, model = embedding.ModelName });
+            new { indexed = added, total = files.Count, vault = vaultPath, model });
+    }
+
+    public static bool NeedsIngest(string vaultPath)
+    {
+        var dbPath = DbPath(vaultPath);
+        if (!File.Exists(dbPath)) return true;
+        var dbMtime = File.GetLastWriteTimeUtc(dbPath);
+        return Directory.EnumerateFiles(vaultPath, "*.md", SearchOption.AllDirectories)
+            .Any(f => File.GetLastWriteTimeUtc(f) > dbMtime);
     }
 
     internal static string DbPath(string vaultPath) =>

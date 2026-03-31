@@ -5,12 +5,15 @@ using Memctl.Implementations.Embedding;
 namespace Memctl.Operators;
 
 /// <summary>Hybrid search: RRF fusion of BM25 + semantic.</summary>
-public sealed class SearchOperator(INoteIndex index, GemmaEmbeddingEngine embedding)
+public sealed class SearchOperator(IVaultReader vaultReader, INoteIndex index, GemmaEmbeddingEngine embedding)
 {
     private const int RrfK = 60;  // RRF constant
 
     public MemctlOutcome Execute(string vaultPath, string query, int limit)
     {
+        if (IngestOperator.NeedsIngest(vaultPath))
+            new IngestOperator(vaultReader, index, embedding).Execute(vaultPath);
+
         index.Initialize(IngestOperator.DbPath(vaultPath));
 
         var mismatch = ModelGuard.Check(index, embedding, "search");

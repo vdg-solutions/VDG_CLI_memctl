@@ -3,10 +3,13 @@ using Memctl.CoreAbstractions.Ports;
 
 namespace Memctl.Operators;
 
-public sealed class SearchTagsOperator(INoteIndex index)
+public sealed class SearchTagsOperator(IVaultReader vaultReader, INoteIndex index)
 {
     public MemctlOutcome Execute(string vaultPath, string[] tags, bool matchAll, int limit)
     {
+        if (IngestOperator.NeedsIngest(vaultPath))
+            new IngestOperator(vaultReader, index, null).Execute(vaultPath);
+
         index.Initialize(IngestOperator.DbPath(vaultPath));
         var notes = index.SearchByTags(tags, matchAll, limit);
 
