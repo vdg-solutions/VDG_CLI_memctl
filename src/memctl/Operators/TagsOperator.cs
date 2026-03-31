@@ -1,0 +1,15 @@
+using Memctl.CoreAbstractions.Entities;
+using Memctl.CoreAbstractions.Ports;
+
+namespace Memctl.Operators;
+
+public sealed class TagsOperator(INoteIndex index)
+{
+    public MemctlOutcome Execute(string vaultPath)
+    {
+        index.Initialize(IngestOperator.DbPath(vaultPath));
+        var tags = index.GetTagStats();
+        return MemctlOutcome.Ok("tags", $"{tags.Count} tags",
+            new { count = tags.Count, tags = tags.Select(t => new { tag = t.Tag, count = t.Count }) });
+    }
+}

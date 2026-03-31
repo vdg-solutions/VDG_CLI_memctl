@@ -1,0 +1,349 @@
+using System.CommandLine;
+using System.CommandLine.Invocation;
+using Memctl.Bootstrap;
+using Memctl.Boundary.Options;
+using Memctl.CoreAbstractions.Entities;
+using Memctl.Implementations.Config;
+using Memctl.Implementations.Embedding;
+using Memctl.Implementations.Index;
+using Memctl.Implementations.Llm;
+using Memctl.Implementations.Vault;
+using Memctl.Operators;
+
+// --- shared services ---
+var vaultReader = new ObsidianVaultReader();
+var noteIndex   = new SqliteNoteIndex();
+
+// --- global options ---
+var vaultOpt     = new Option<string> ("--vault",      "Vault directory path");
+var limitOpt     = new Option<int>    ("--limit",      () => 10, "Max results");
+var llmUrlOpt    = new Option<string?>("--llm-url",    "OpenAI-compatible API base URL");
+var llmModelOpt  = new Option<string?>("--llm-model",  "LLM model name");
+var llmKeyOpt    = new Option<string?>("--llm-key",    "API key");
+var modelDirOpt  = new Option<string?>("--model-dir",  "Override embedding model directory");
+
+var root = new RootCommand("Obsidian-compatible personal memory vault CLI");
+root.AddGlobalOption(vaultOpt);
+root.AddGlobalOption(limitOpt);
+root.AddGlobalOption(llmUrlOpt);
+root.AddGlobalOption(llmModelOpt);
+root.AddGlobalOption(llmKeyOpt);
+root.AddGlobalOption(modelDirOpt);
+
+GlobalOptions G(InvocationContext ctx) => new()
+{
+    Vault    = ctx.ParseResult.GetValueForOption(vaultOpt),
+    Limit    = ctx.ParseResult.GetValueForOption(limitOpt),
+    LlmUrl   = ctx.ParseResult.GetValueForOption(llmUrlOpt),
+    LlmModel = ctx.ParseResult.GetValueForOption(llmModelOpt),
+    LlmKey   = ctx.ParseResult.GetValueForOption(llmKeyOpt),
+    ModelDir = ctx.ParseResult.GetValueForOption(modelDirOpt),
+};
+
+GemmaEmbeddingEngine? embeddingEngine = null;
+async Task<GemmaEmbeddingEngine> GetEmbedding(GlobalOptions g)
+{
+    // Re-create if model dir changed between calls (e.g. different commands in same session)
+    var resolvedDir = MemctlConfig.ResolveModelDir(g.ModelDir);
+    if (embeddingEngine is not null && embeddingEngine.ModelName != Path.GetFileName(resolvedDir.TrimEnd(Path.DirectorySeparatorChar, '/')))
+    {
+        embeddingEngine.Dispose();
+        embeddingEngine = null;
+    }
+    return embeddingEngine ??= await GemmaEmbeddingEngine.CreateAsync(resolvedDir);
+}
+
+OpenAiLlmClient? LlmClient(GlobalOptions g) =>
+    g.LlmUrl is not null && g.LlmModel is not null
+        ? new OpenAiLlmClient(g.LlmUrl, g.LlmModel, g.LlmKey)
+        : null;
+
+// Vault guard — returns vault path or prints error and returns null
+string? RequireVault(GlobalOptions g, InvocationContext ctx)
+{
+    if (g.Vault is not null) return g.Vault;
+    ResultPrinter.Print(MemctlOutcome.Fail("error", "--vault is required for this command"));
+    ctx.ExitCode = 1;
+    return null;
+}
+
+// --- init ---
+var initCmd = new Command("init", "Create a new Obsidian-compatible vault");
+initCmd.SetHandler(ctx =>
+{
+    var g = G(ctx);
+    if (RequireVault(g, ctx) is not { } vault) return;
+    vaultReader.InitVaultStructure(vault);
+    ResultPrinter.Print(MemctlOutcome.Ok("init", $"Vault initialized at {vault}", new { vault }));
+});
+root.AddCommand(initCmd);
+
+// --- ingest ---
+var ingestCmd = new Command("ingest", "Index all notes in vault");
+ingestCmd.SetHandler(async ctx =>
+{
+    var g = G(ctx);
+    if (RequireVault(g, ctx) is not { } vault) return;
+    var emb = await GetEmbedding(g);
+    var op  = new IngestOperator(vaultReader, noteIndex, emb);
+    ResultPrinter.Print(op.Execute(vault));
+});
+root.AddCommand(ingestCmd);
+
+// --- add ---
+var addTextArg   = new Argument<string>("text", "Note content");
+var addTitleOpt  = new Option<string?>("--title", "Note title (auto-extracted if omitted)");
+var addTagsOpt   = new Option<string?>("--tags",  "Comma-separated tags");
+var addFileOpt   = new Option<string?>("--file",  "Output filename (e.g. notes/crypto.md)");
+var addCmd = new Command("add", "Add a new note to vault");
+addCmd.AddArgument(addTextArg);
+addCmd.AddOption(addTitleOpt);
+addCmd.AddOption(addTagsOpt);
+addCmd.AddOption(addFileOpt);
+addCmd.SetHandler(async ctx =>
+{
+    var g = G(ctx);
+    if (RequireVault(g, ctx) is not { } vault) return;
+    var pr   = ctx.ParseResult;
+    var emb  = await GetEmbedding(g);
+    var op   = new AddOperator(vaultReader, noteIndex, emb);
+    var tags = pr.GetValueForOption(addTagsOpt)?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    var outcome = await op.ExecuteAsync(
+        vault,
+        pr.GetValueForArgument(addTextArg),
+        pr.GetValueForOption(addTitleOpt),
+        tags,
+        pr.GetValueForOption(addFileOpt),
+        LlmClient(g));
+    ResultPrinter.Print(outcome);
+    ctx.ExitCode = outcome.Success ? 0 : 1;
+});
+root.AddCommand(addCmd);
+
+// --- get ---
+var getIdArg = new Argument<string>("id", "Note ID or file path");
+var getCmd   = new Command("get", "Get full note content by ID or path");
+getCmd.AddArgument(getIdArg);
+getCmd.SetHandler(ctx =>
+{
+    var g = G(ctx);
+    if (RequireVault(g, ctx) is not { } vault) return;
+    var op = new GetOperator(noteIndex);
+    var outcome = op.Execute(vault, ctx.ParseResult.GetValueForArgument(getIdArg));
+    ResultPrinter.Print(outcome);
+    ctx.ExitCode = outcome.Success ? 0 : 2;
+});
+root.AddCommand(getCmd);
+
+// --- list ---
+var listTagOpt = new Option<string?>("--tag", "Filter by tag");
+var listCmd    = new Command("list", "List notes");
+listCmd.AddOption(listTagOpt);
+listCmd.SetHandler(ctx =>
+{
+    var g = G(ctx);
+    if (RequireVault(g, ctx) is not { } vault) return;
+    var op = new ListOperator(noteIndex);
+    ResultPrinter.Print(op.Execute(vault, ctx.ParseResult.GetValueForOption(listTagOpt), g.Limit));
+});
+root.AddCommand(listCmd);
+
+// --- search (hybrid RRF) ---
+var searchQueryArg = new Argument<string>("query");
+var searchCmd      = new Command("search", "Hybrid search (BM25 + semantic, RRF fusion)");
+searchCmd.AddArgument(searchQueryArg);
+searchCmd.SetHandler(async ctx =>
+{
+    var g = G(ctx);
+    if (RequireVault(g, ctx) is not { } vault) return;
+    var emb = await GetEmbedding(g);
+    var op  = new SearchOperator(noteIndex, emb);
+    ResultPrinter.Print(op.Execute(vault, ctx.ParseResult.GetValueForArgument(searchQueryArg), g.Limit));
+});
+root.AddCommand(searchCmd);
+
+// --- search-semantic ---
+var semQueryArg = new Argument<string>("query");
+var semScopeOpt = new Option<string?>("--scope", "Comma-separated note IDs to restrict search");
+var semCmd      = new Command("search-semantic", "Semantic vector search");
+semCmd.AddArgument(semQueryArg);
+semCmd.AddOption(semScopeOpt);
+semCmd.SetHandler(async ctx =>
+{
+    var g = G(ctx);
+    if (RequireVault(g, ctx) is not { } vault) return;
+    var emb   = await GetEmbedding(g);
+    var op    = new SearchSemanticOperator(noteIndex, emb);
+    var scope = ctx.ParseResult.GetValueForOption(semScopeOpt)
+        ?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    ResultPrinter.Print(op.Execute(vault, ctx.ParseResult.GetValueForArgument(semQueryArg), g.Limit, scope));
+});
+root.AddCommand(semCmd);
+
+// --- search-text ---
+var stQueryArg = new Argument<string>("query");
+var stCmd      = new Command("search-text", "Full-text BM25 search");
+stCmd.AddArgument(stQueryArg);
+stCmd.SetHandler(ctx =>
+{
+    var g = G(ctx);
+    if (RequireVault(g, ctx) is not { } vault) return;
+    var op = new SearchTextOperator(noteIndex);
+    ResultPrinter.Print(op.Execute(vault, ctx.ParseResult.GetValueForArgument(stQueryArg), g.Limit));
+});
+root.AddCommand(stCmd);
+
+// --- search-tags ---
+var sTagsArg    = new Argument<string>("tags", "Comma-separated tag list");
+var sTagsMatch  = new Option<string>("--match", () => "any", "Match mode: any|all");
+var sTagsCmd    = new Command("search-tags", "Search by tags");
+sTagsCmd.AddArgument(sTagsArg);
+sTagsCmd.AddOption(sTagsMatch);
+sTagsCmd.SetHandler(ctx =>
+{
+    var g = G(ctx);
+    if (RequireVault(g, ctx) is not { } vault) return;
+    var op   = new SearchTagsOperator(noteIndex);
+    var tags = ctx.ParseResult.GetValueForArgument(sTagsArg)
+        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    var matchAll = ctx.ParseResult.GetValueForOption(sTagsMatch) == "all";
+    ResultPrinter.Print(op.Execute(vault, tags, matchAll, g.Limit));
+});
+root.AddCommand(sTagsCmd);
+
+// --- search-links ---
+var slIdArg    = new Argument<string>("id", "Source note ID or file path");
+var slDepthOpt = new Option<int>("--depth", () => 1, "Traversal depth");
+var slCmd      = new Command("search-links", "Traverse wikilink graph from a note");
+slCmd.AddArgument(slIdArg);
+slCmd.AddOption(slDepthOpt);
+slCmd.SetHandler(ctx =>
+{
+    var g = G(ctx);
+    if (RequireVault(g, ctx) is not { } vault) return;
+    var op = new SearchLinksOperator(noteIndex);
+    ResultPrinter.Print(op.Execute(vault,
+        ctx.ParseResult.GetValueForArgument(slIdArg),
+        ctx.ParseResult.GetValueForOption(slDepthOpt)));
+});
+root.AddCommand(slCmd);
+
+// --- search-date ---
+var sdFromOpt = new Option<string?>("--from", "Start date (ISO 8601)");
+var sdToOpt   = new Option<string?>("--to",   "End date (ISO 8601)");
+var sdCmd     = new Command("search-date", "Search notes by creation date range");
+sdCmd.AddOption(sdFromOpt);
+sdCmd.AddOption(sdToOpt);
+sdCmd.SetHandler(ctx =>
+{
+    var g = G(ctx);
+    if (RequireVault(g, ctx) is not { } vault) return;
+    var op = new SearchDateOperator(noteIndex);
+    var pr = ctx.ParseResult;
+    DateTime? from = pr.GetValueForOption(sdFromOpt) is { } fs ? DateTime.Parse(fs).ToUniversalTime() : null;
+    DateTime? to   = pr.GetValueForOption(sdToOpt)   is { } ts ? DateTime.Parse(ts).ToUniversalTime() : null;
+    ResultPrinter.Print(op.Execute(vault, from, to, g.Limit));
+});
+root.AddCommand(sdCmd);
+
+// --- grep ---
+var grepPatternArg = new Argument<string>("pattern");
+var grepRegexOpt   = new Option<bool>("--regex", "Use regex pattern");
+var grepCmd        = new Command("grep", "Search raw markdown files by pattern");
+grepCmd.AddArgument(grepPatternArg);
+grepCmd.AddOption(grepRegexOpt);
+grepCmd.SetHandler(ctx =>
+{
+    var g = G(ctx);
+    if (RequireVault(g, ctx) is not { } vault) return;
+    var op = new GrepOperator();
+    ResultPrinter.Print(op.Execute(vault,
+        ctx.ParseResult.GetValueForArgument(grepPatternArg),
+        ctx.ParseResult.GetValueForOption(grepRegexOpt),
+        g.Limit));
+});
+root.AddCommand(grepCmd);
+
+// --- tags ---
+var tagsCmd = new Command("tags", "List all tags with note counts");
+tagsCmd.SetHandler(ctx =>
+{
+    var g = G(ctx);
+    if (RequireVault(g, ctx) is not { } vault) return;
+    ResultPrinter.Print(new TagsOperator(noteIndex).Execute(vault));
+});
+root.AddCommand(tagsCmd);
+
+// --- stats ---
+var statsCmd = new Command("stats", "Vault statistics");
+statsCmd.SetHandler(ctx =>
+{
+    var g = G(ctx);
+    if (RequireVault(g, ctx) is not { } vault) return;
+    ResultPrinter.Print(new StatsOperator(noteIndex).Execute(vault));
+});
+root.AddCommand(statsCmd);
+
+// --- organize ---
+var orgSinceOpt = new Option<string?>("--since", "Only organize notes modified after this date");
+var orgCmd      = new Command("organize", "Auto-tag and auto-link notes via LLM");
+orgCmd.AddOption(orgSinceOpt);
+orgCmd.SetHandler(async ctx =>
+{
+    var g = G(ctx);
+    if (RequireVault(g, ctx) is not { } vault) return;
+    if (g.LlmUrl is null || g.LlmModel is null)
+    {
+        ResultPrinter.Print(MemctlOutcome.Fail("organize", "--llm-url and --llm-model are required"));
+        ctx.ExitCode = 1;
+        return;
+    }
+    var llm = LlmClient(g)!;
+    var op  = new OrganizeOperator(vaultReader, noteIndex, llm);
+    DateTime? since = ctx.ParseResult.GetValueForOption(orgSinceOpt) is { } s
+        ? DateTime.Parse(s).ToUniversalTime() : null;
+    var outcome = await op.ExecuteAsync(vault, since);
+    ResultPrinter.Print(outcome);
+    ctx.ExitCode = outcome.Success ? 0 : 1;
+});
+root.AddCommand(orgCmd);
+
+// --- status ---
+var statusCmd = new Command("status", "Check model and vault readiness");
+statusCmd.SetHandler(ctx =>
+{
+    var g = G(ctx);
+    ResultPrinter.Print(new StatusOperator().Execute(g.Vault ?? ""));
+});
+root.AddCommand(statusCmd);
+
+// --- model ---
+var modelCmd = new Command("model", "Manage embedding model");
+var modelDownloadCmd = new Command("download", "Download EmbeddingGemma ONNX model (~310 MB, one-time)");
+modelDownloadCmd.SetHandler(async ctx =>
+{
+    var outcome = await new ModelDownloadOperator().ExecuteAsync();
+    ResultPrinter.Print(outcome);
+    ctx.ExitCode = outcome.Success ? 0 : 9;
+});
+modelCmd.AddCommand(modelDownloadCmd);
+
+var modelListCmd = new Command("list", "List downloaded embedding models");
+modelListCmd.SetHandler(_ => ResultPrinter.Print(new ModelListOperator().Execute()));
+modelCmd.AddCommand(modelListCmd);
+
+var modelUseNameArg = new Argument<string>("name", "Model directory name (e.g. embeddinggemma-300m)");
+var modelUseCmd     = new Command("use", "Set default embedding model");
+modelUseCmd.AddArgument(modelUseNameArg);
+modelUseCmd.SetHandler(ctx =>
+{
+    var outcome = new ModelUseOperator().Execute(ctx.ParseResult.GetValueForArgument(modelUseNameArg));
+    ResultPrinter.Print(outcome);
+    ctx.ExitCode = outcome.Success ? 0 : 1;
+});
+modelCmd.AddCommand(modelUseCmd);
+
+root.AddCommand(modelCmd);
+
+return await root.InvokeAsync(args);
+
