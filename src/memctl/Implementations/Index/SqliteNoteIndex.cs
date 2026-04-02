@@ -241,13 +241,10 @@ public sealed class SqliteNoteIndex : INoteIndex
 
     // --- schema ---
 
-    private void ApplySchema() => Exec(@"
-        CREATE TABLE IF NOT EXISTS metadata (
-            key   TEXT PRIMARY KEY,
-            value TEXT NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS notes (
+    private void ApplySchema()
+    {
+        ExecOne("CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
+        ExecOne(@"CREATE TABLE IF NOT EXISTS notes (
             id          TEXT PRIMARY KEY,
             file_path   TEXT NOT NULL UNIQUE,
             title       TEXT NOT NULL,
@@ -257,32 +254,26 @@ public sealed class SqliteNoteIndex : INoteIndex
             created_at  TEXT NOT NULL,
             modified_at TEXT NOT NULL,
             embedding   BLOB
-        );
-
-        CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
-            id UNINDEXED,
-            title,
-            content,
-            content='notes',
-            content_rowid='rowid'
-        );
-
-        CREATE TRIGGER IF NOT EXISTS notes_ai AFTER INSERT ON notes BEGIN
+        )");
+        ExecOne(@"CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
+            id UNINDEXED, title, content,
+            content='notes', content_rowid='rowid'
+        )");
+        ExecOne(@"CREATE TRIGGER IF NOT EXISTS notes_ai AFTER INSERT ON notes BEGIN
             INSERT INTO notes_fts(rowid, id, title, content)
             VALUES (new.rowid, new.id, new.title, new.content);
-        END;
-
-        CREATE TRIGGER IF NOT EXISTS notes_au AFTER UPDATE ON notes BEGIN
+        END");
+        ExecOne(@"CREATE TRIGGER IF NOT EXISTS notes_au AFTER UPDATE ON notes BEGIN
             INSERT INTO notes_fts(notes_fts, rowid, id, title, content)
             VALUES ('delete', old.rowid, old.id, old.title, old.content);
             INSERT INTO notes_fts(rowid, id, title, content)
             VALUES (new.rowid, new.id, new.title, new.content);
-        END;
-
-        CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
+        END");
+        ExecOne(@"CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
             INSERT INTO notes_fts(notes_fts, rowid, id, title, content)
             VALUES ('delete', old.rowid, old.id, old.title, old.content);
-        END;");
+        END");
+    }
 
     // --- helpers ---
 
@@ -302,9 +293,14 @@ public sealed class SqliteNoteIndex : INoteIndex
         return notes;
     }
 
+    private void ExecOne(string sql, params (string, object)[] ps)
+    {
+        using var cmd = Cmd(sql, ps);
+        cmd.ExecuteNonQuery();
+    }
+
     private void Exec(string sql, params (string, object)[] ps)
     {
-        // Execute multiple statements separated by semicolons
         foreach (var stmt in sql.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             if (string.IsNullOrWhiteSpace(stmt)) continue;
