@@ -182,12 +182,80 @@ Vault overview: note count, tag count, link count, index size.
 memctl stats --vault ./vault
 ```
 
+### `weight <id> <value>`
+Set importance weight (0.0–1.0). Affects `list` sort order — higher weight = appears first.
+```bash
+memctl weight abc123 0.9 --vault ./vault   # mark as high importance
+memctl weight abc123 0.0 --vault ./vault   # deprioritize
+```
+
+### `identity set <id|path>`
+Designate a note as the vault identity note. Its content is injected into every MCP `initialize` response via `serverInfo.instructions`, giving every AI session immediate project context.
+```bash
+memctl identity set abc123 --vault ./vault
+memctl identity set "project/identity.md" --vault ./vault
+```
+
+### `identity get`
+Retrieve the current identity note.
+```bash
+memctl identity get --vault ./vault
+```
+
+### `add-turn <content>`
+Append a conversation turn to an existing note. Designed for logging AI session exchanges.
+```bash
+memctl add-turn "User: how does X work?\nAssistant: X works by..." --vault ./vault --id abc123
+```
+
 ### `organize`
 LLM scans all notes, writes tags and wikilinks back to frontmatter.
 ```bash
 memctl organize --vault ./vault --llm-url ... --llm-model ... --llm-key ...
 memctl organize --vault ./vault --since 2026-03-01 --llm-url ...  # only recent notes
 ```
+
+---
+
+## MCP Mode (AI Agent Integration)
+
+Run memctl as a stdio MCP server. Exposes 13 tools to any MCP-compatible client (Claude Code, Cursor, etc.).
+
+```bash
+memctl mcp --vault ./vault
+```
+
+**Claude Code config** (`~/.claude/claude_desktop_config.json` or project `.mcp.json`):
+```json
+{
+  "mcpServers": {
+    "memctl": {
+      "command": "memctl",
+      "args": ["mcp", "--vault", "/absolute/path/to/vault"]
+    }
+  }
+}
+```
+
+**Available MCP tools:**
+
+| Tool | Description |
+|------|-------------|
+| `search` | Hybrid BM25 + semantic search |
+| `search_semantic` | Pure vector similarity |
+| `search_tags` | Filter by tags |
+| `search_date` | Filter by date range |
+| `search_links` | Traverse wikilink graph |
+| `get` | Retrieve note by ID or path |
+| `list` | List notes by importance |
+| `get_identity` | Get the vault identity note |
+| `create` | Create new note, index immediately |
+| `update` | Replace note content, re-index |
+| `append` | Append to note, re-index |
+| `delete` | Delete note from disk and index |
+| `set_weight` | Set note importance weight |
+
+The `initialize` response automatically includes a session protocol in `serverInfo.instructions` — telling the agent to call `list` and `search` at session start for context.
 
 ---
 
