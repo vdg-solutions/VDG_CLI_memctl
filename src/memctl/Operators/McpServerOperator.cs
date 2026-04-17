@@ -283,6 +283,11 @@ public sealed class McpServerOperator(
 
 ---
 ## memctl Session Protocol
+First time in a project (no vault yet — `list` returns empty or errors):
+1. Use CLI: `memctl init --vault ./vault` to create vault structure
+2. Use CLI: `memctl ingest` to index existing markdown files
+3. Then proceed with normal session protocol below
+
 At the start of every session:
 1. Call `list` (limit 10) — load top notes by importance weight
 2. Call `search` with current task keywords — load relevant context
