@@ -4,3 +4,5 @@
 | 2026-04-17 | Review 6 | — | — | 4.8/5 | — | APPROVE |
 | 2026-04-17 | #7 vault write tools | PASS | PASS | 5.0/5 | 5.0/5 | 0 |
 | 2026-04-17 | Review 7 | — | — | 4.9/5 | — | APPROVE |
+| 2026-04-17 | #8 vault auto-detect | PASS | PASS | 5.0/5 | 5.0/5 | 0 |
+| 2026-04-17 | Review 8 | — | — | 4.9/5 | — | APPROVE |
