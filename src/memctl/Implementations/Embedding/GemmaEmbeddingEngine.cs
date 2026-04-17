@@ -43,6 +43,12 @@ public sealed class GemmaEmbeddingEngine : IEmbeddingEngine
         Dim            = (int)(meta.Dimensions.Length == 2 ? meta.Dimensions[1] : meta.Dimensions[2]);
     }
 
+    public static bool IsReady(string? modelDir = null)
+    {
+        var dir = modelDir ?? DefaultModelDir();
+        return Directory.Exists(dir) && File.Exists(Path.Combine(dir, "model_quantized.onnx"));
+    }
+
     public static async Task<GemmaEmbeddingEngine> CreateAsync(string? modelDir = null)
     {
         var dir       = modelDir ?? DefaultModelDir();

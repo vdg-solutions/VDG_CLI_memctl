@@ -161,6 +161,11 @@ public sealed class McpServerOperator(
                     req: [("id",     "string", "Note ID or relative file path"),
                           ("weight", "number", "Importance weight 0.0-1.0")],
                     opt: []),
+
+                MakeTool("delete",
+                    "Permanently delete a note from vault and index by ID or file path",
+                    req: [("id", "string", "Note ID or relative file path")],
+                    opt: []),
             },
         },
     };
@@ -189,6 +194,7 @@ public sealed class McpServerOperator(
                 "update"          => await CallUpdateAsync(args, ct),
                 "append"          => await CallAppendAsync(args, ct),
                 "set_weight"      => CallSetWeight(args),
+                "delete"          => CallDelete(args),
                 _                 => null,
             };
 
@@ -286,7 +292,11 @@ public sealed class McpServerOperator(
     private async Task<GemmaEmbeddingEngine> GetEmbeddingAsync()
     {
         if (_embedding is not null) return _embedding;
-        _embedding = await GemmaEmbeddingEngine.CreateAsync(MemctlConfig.ResolveModelDir(modelDir)).ConfigureAwait(false);
+        var dir = MemctlConfig.ResolveModelDir(modelDir);
+        if (!GemmaEmbeddingEngine.IsReady(dir))
+            throw new InvalidOperationException(
+                "Embedding model not found. Run 'memctl model download' first, then restart the MCP server.");
+        _embedding = await GemmaEmbeddingEngine.CreateAsync(dir).ConfigureAwait(false);
         return _embedding;
     }
 
@@ -420,5 +430,11 @@ public sealed class McpServerOperator(
         index.SetWeight(note.Id, clamped);
         return MemctlOutcome.Ok("set_weight", $"Weight set to {(float)Math.Round(clamped, 2)}",
             new { id = note.Id, file = note.FilePath, weight = (float)Math.Round(clamped, 2) });
+    }
+
+    private MemctlOutcome CallDelete(JsonElement args)
+    {
+        var id = Str(args, "id") ?? throw new InvalidOperationException("'id' is required");
+        return new VaultWriteOperator(vaultReader, index, null).ExecuteDelete(vaultPath, id);
     }
 }

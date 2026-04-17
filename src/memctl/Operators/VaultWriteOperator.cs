@@ -4,7 +4,7 @@ using Memctl.Implementations.Embedding;
 
 namespace Memctl.Operators;
 
-public sealed class VaultWriteOperator(IVaultReader vaultReader, INoteIndex index, GemmaEmbeddingEngine embedding)
+public sealed class VaultWriteOperator(IVaultReader vaultReader, INoteIndex index, GemmaEmbeddingEngine? embedding)
 {
     public MemctlOutcome ExecuteCreate(string vaultPath, string content, string? title, string? folder, string? filename)
     {
@@ -30,7 +30,7 @@ public sealed class VaultWriteOperator(IVaultReader vaultReader, INoteIndex inde
             Created  = DateTime.UtcNow,
             Modified = DateTime.UtcNow,
         };
-        var emb    = embedding.Embed($"{note.Title}\n{note.Content}");
+        var emb    = embedding!.Embed($"{note.Title}\n{note.Content}");
         var stored = note with { Embedding = emb };
 
         vaultReader.WriteNote(stored, vaultPath, relativeFile);
@@ -51,7 +51,7 @@ public sealed class VaultWriteOperator(IVaultReader vaultReader, INoteIndex inde
             return MemctlOutcome.Fail("update", $"Note not found: {id}");
 
         var updated = existing with { Content = content, Modified = DateTime.UtcNow };
-        var emb     = embedding.Embed($"{updated.Title}\n{updated.Content}");
+        var emb     = embedding!.Embed($"{updated.Title}\n{updated.Content}");
         var stored  = updated with { Embedding = emb };
 
         vaultReader.WriteNote(stored, vaultPath, existing.FilePath);
@@ -74,7 +74,7 @@ public sealed class VaultWriteOperator(IVaultReader vaultReader, INoteIndex inde
         var separator = existing.Content.EndsWith('\n') ? "" : "\n";
         var combined  = existing.Content + separator + content;
         var appended  = existing with { Content = combined, Modified = DateTime.UtcNow };
-        var emb       = embedding.Embed($"{appended.Title}\n{appended.Content}");
+        var emb       = embedding!.Embed($"{appended.Title}\n{appended.Content}");
         var stored    = appended with { Embedding = emb };
 
         vaultReader.WriteNote(stored, vaultPath, existing.FilePath);
@@ -82,6 +82,29 @@ public sealed class VaultWriteOperator(IVaultReader vaultReader, INoteIndex inde
 
         return MemctlOutcome.Ok("append", $"Appended to: {appended.Title}",
             new { id = appended.Id, file = appended.FilePath, title = appended.Title });
+    }
+
+    public MemctlOutcome ExecuteDelete(string vaultPath, string id)
+    {
+        if (IngestOperator.NeedsIngest(vaultPath))
+            new IngestOperator(vaultReader, index, null).Execute(vaultPath);
+        index.Initialize(IngestOperator.DbPath(vaultPath));
+
+        var existing = index.GetById(id) ?? index.GetByFilePath(id);
+        if (existing is null)
+            return MemctlOutcome.Fail("delete", $"Note not found: {id}");
+
+        var absolutePath = Path.GetFullPath(Path.Combine(vaultPath, existing.FilePath));
+        if (!IsPathSafe(vaultPath, absolutePath))
+            return MemctlOutcome.Fail("delete", "Path traversal detected — refusing to delete outside vault root");
+
+        if (File.Exists(absolutePath))
+            File.Delete(absolutePath);
+
+        index.Delete(existing.Id);
+
+        return MemctlOutcome.Ok("delete", $"Deleted note: {existing.Title}",
+            new { id = existing.Id, file = existing.FilePath, title = existing.Title });
     }
 
     private static bool IsPathSafe(string vaultPath, string absoluteResolved)
