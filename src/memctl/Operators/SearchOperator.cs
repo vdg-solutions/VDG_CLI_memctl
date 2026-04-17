@@ -9,7 +9,7 @@ public sealed class SearchOperator(IVaultReader vaultReader, INoteIndex index, G
 {
     private const int RrfK = 60;  // RRF constant
 
-    public MemctlOutcome Execute(string vaultPath, string query, int limit)
+    public MemctlOutcome Execute(string vaultPath, string query, int limit, string? folderPrefix = null)
     {
         if (IngestOperator.NeedsIngest(vaultPath))
             new IngestOperator(vaultReader, index, embedding).Execute(vaultPath);
@@ -19,9 +19,9 @@ public sealed class SearchOperator(IVaultReader vaultReader, INoteIndex index, G
         var mismatch = ModelGuard.Check(index, embedding, "search");
         if (mismatch is not null) return mismatch;
 
-        var bm25Hits     = index.SearchBm25(query, limit * 2);
+        var bm25Hits     = index.SearchBm25(query, limit * 2, folderPrefix);
         var qEmb         = embedding.Embed(query);
-        var semanticHits = index.SearchSemantic(qEmb, limit * 2);
+        var semanticHits = index.SearchSemantic(qEmb, limit * 2, folderPrefix: folderPrefix);
 
         var scores = new Dictionary<string, float>();
 

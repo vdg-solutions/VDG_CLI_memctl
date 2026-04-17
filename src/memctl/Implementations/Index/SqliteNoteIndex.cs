@@ -58,17 +58,20 @@ public sealed class SqliteNoteIndex : INoteIndex
     public IReadOnlyList<Note> GetAll() =>
         QueryMany("SELECT * FROM notes ORDER BY created_at DESC");
 
-    public IReadOnlyList<SearchHit> SearchBm25(string query, int limit)
+    public IReadOnlyList<SearchHit> SearchBm25(string query, int limit, string? folderPrefix = null)
     {
-        using var cmd = Cmd(@"
+        var prefix       = NormalizePrefix(folderPrefix);
+        var folderClause = prefix is not null ? " AND n.file_path LIKE @prefix" : "";
+        using var cmd = Cmd($@"
             SELECT n.*, bm25(notes_fts) AS rank
             FROM notes_fts f
             JOIN notes n ON n.rowid = f.rowid
-            WHERE notes_fts MATCH @q
+            WHERE notes_fts MATCH @q{folderClause}
             ORDER BY rank
             LIMIT @limit",
             ("@q", EscapeFts(query)),
             ("@limit", limit));
+        if (prefix is not null) cmd.Parameters.AddWithValue("@prefix", prefix);
 
         var hits = new List<SearchHit>();
         using var r = cmd.ExecuteReader();
@@ -85,14 +88,16 @@ public sealed class SqliteNoteIndex : INoteIndex
         return hits;
     }
 
-    public IReadOnlyList<SearchHit> SearchSemantic(float[] queryEmbedding, int limit, IReadOnlyList<string>? scopeIds = null)
+    public IReadOnlyList<SearchHit> SearchSemantic(float[] queryEmbedding, int limit, IReadOnlyList<string>? scopeIds = null, string? folderPrefix = null)
     {
-        // Load all notes with embeddings, compute cosine sim in-memory
-        var sql = scopeIds is { Count: > 0 }
-            ? $"SELECT * FROM notes WHERE embedding IS NOT NULL AND id IN ({string.Join(',', scopeIds.Select((_, i) => $"@id{i}"))})"
-            : "SELECT * FROM notes WHERE embedding IS NOT NULL";
+        var prefix = NormalizePrefix(folderPrefix);
+        var conditions = new List<string> { "embedding IS NOT NULL" };
+        if (prefix is not null) conditions.Add("file_path LIKE @prefix");
+        if (scopeIds is { Count: > 0 }) conditions.Add($"id IN ({string.Join(',', scopeIds.Select((_, i) => $"@id{i}"))})");
 
+        var sql = $"SELECT * FROM notes WHERE {string.Join(" AND ", conditions)}";
         using var cmd = Cmd(sql);
+        if (prefix is not null) cmd.Parameters.AddWithValue("@prefix", prefix);
         if (scopeIds is { Count: > 0 })
             for (var i = 0; i < scopeIds.Count; i++)
                 cmd.Parameters.AddWithValue($"@id{i}", scopeIds[i]);
@@ -276,6 +281,9 @@ public sealed class SqliteNoteIndex : INoteIndex
     }
 
     // --- helpers ---
+
+    private static string? NormalizePrefix(string? raw) =>
+        string.IsNullOrWhiteSpace(raw) ? null : raw.TrimEnd('/') + "/%";
 
     private Note? QueryOne(string sql, params (string, object)[] ps)
     {

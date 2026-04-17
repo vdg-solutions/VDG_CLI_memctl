@@ -6,7 +6,7 @@ namespace Memctl.Operators;
 
 public sealed class SearchSemanticOperator(IVaultReader vaultReader, INoteIndex index, GemmaEmbeddingEngine embedding)
 {
-    public MemctlOutcome Execute(string vaultPath, string query, int limit, string[]? scopeIds)
+    public MemctlOutcome Execute(string vaultPath, string query, int limit, string[]? scopeIds, string? folderPrefix = null)
     {
         if (IngestOperator.NeedsIngest(vaultPath))
             new IngestOperator(vaultReader, index, embedding).Execute(vaultPath);
@@ -17,7 +17,7 @@ public sealed class SearchSemanticOperator(IVaultReader vaultReader, INoteIndex 
         if (mismatch is not null) return mismatch;
 
         var qEmb = embedding.Embed(query);
-        var hits = index.SearchSemantic(qEmb, limit, scopeIds);
+        var hits = index.SearchSemantic(qEmb, limit, scopeIds, folderPrefix);
 
         return MemctlOutcome.Ok("search-semantic", $"{hits.Count} results", new
         {
