@@ -49,7 +49,8 @@ Write-Host "  Remove-Item $DestBin, $DestDir\onnxruntime*.dll, $DestDir\e_sqlite
 Write-Host ""
 
 # add to user PATH if not present
-$userPath = [Environment]::GetEnvironmentVariable("PATH", "User") ?? ""
+$userPathRaw = [Environment]::GetEnvironmentVariable("PATH", "User")
+$userPath = if ($null -ne $userPathRaw) { $userPathRaw } else { "" }
 if ($userPath -notlike "*$DestDir*") {
     $newPath = if ($userPath) { "$DestDir;$userPath" } else { $DestDir }
     [Environment]::SetEnvironmentVariable("PATH", $newPath, "User")
