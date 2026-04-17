@@ -279,12 +279,25 @@ public sealed class McpServerOperator(
         return MemctlOutcome.Ok("get_identity", "Identity note", GetOperator.NoteToData(note));
     }
 
+    private const string SessionProtocol = """
+
+---
+## memctl Session Protocol
+At the start of every session:
+1. Call `list` (limit 10) — load top notes by importance weight
+2. Call `search` with current task keywords — load relevant context
+
+Before ending session:
+- `create` or `append` to persist decisions, findings, or insights
+- `set_weight 1.0` on notes that will matter next session
+""";
+
     private string? GetIdentityContent()
     {
         var noteId = index.GetMetadata("identity_note_id");
-        if (noteId is null) return null;
+        if (noteId is null) return SessionProtocol.TrimStart();
         var note = index.GetById(noteId);
-        return note?.Content;
+        return note is null ? SessionProtocol.TrimStart() : note.Content + SessionProtocol;
     }
 
     // --- embedding lazy init ---
