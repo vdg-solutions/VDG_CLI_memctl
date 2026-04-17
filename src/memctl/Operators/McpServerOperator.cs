@@ -70,7 +70,7 @@ public sealed class McpServerOperator(
 
     // --- MCP protocol ---
 
-    private static object HandleInitialize(object id) => new
+    private object HandleInitialize(object id) => new
     {
         jsonrpc = "2.0",
         id,
@@ -78,7 +78,7 @@ public sealed class McpServerOperator(
         {
             protocolVersion = "2024-11-05",
             capabilities    = new { tools = new { } },
-            serverInfo      = new { name = "memctl", version = "1.0.0" },
+            serverInfo      = new { name = "memctl", version = "1.0.0", instructions = GetIdentityContent() },
         },
     };
 
@@ -131,6 +131,11 @@ public sealed class McpServerOperator(
                     "Find notes linked to or from a given note (wikilinks graph)",
                     req: [("id", "string", "Note ID or file path")],
                     opt: [("depth", "integer", "Link traversal depth (default 1)")]),
+
+                MakeTool("get_identity",
+                    "Retrieve the vault identity note — load this first in every session for context",
+                    req: [],
+                    opt: []),
             },
         },
     };
@@ -154,6 +159,7 @@ public sealed class McpServerOperator(
                 "search_tags"     => CallSearchTags(args),
                 "search_date"     => CallSearchDate(args),
                 "search_links"    => CallSearchLinks(args),
+                "get_identity"    => CallGetIdentity(),
                 _                 => null,
             };
 
@@ -224,6 +230,26 @@ public sealed class McpServerOperator(
         var id    = Str(args, "id") ?? throw new InvalidOperationException("'id' is required");
         var depth = Int(args, "depth", 1);
         return new SearchLinksOperator(vaultReader, index).Execute(vaultPath, id, depth);
+    }
+
+    private MemctlOutcome CallGetIdentity()
+    {
+        var noteId = index.GetMetadata("identity_note_id");
+        if (noteId is null)
+            return MemctlOutcome.Ok("get_identity", "No identity note set", null);
+        var note = index.GetById(noteId);
+        if (note is null)
+            return MemctlOutcome.Ok("get_identity", "Identity note not found (may have been deleted)", null);
+        index.IncrementAccess(note.Id);
+        return MemctlOutcome.Ok("get_identity", "Identity note", GetOperator.NoteToData(note));
+    }
+
+    private string? GetIdentityContent()
+    {
+        var noteId = index.GetMetadata("identity_note_id");
+        if (noteId is null) return null;
+        var note = index.GetById(noteId);
+        return note?.Content;
     }
 
     // --- embedding lazy init ---

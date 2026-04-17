@@ -422,5 +422,34 @@ weightCmd.SetHandler(ctx =>
 });
 root.AddCommand(weightCmd);
 
+// --- identity ---
+var identityCmd = new Command("identity", "Manage vault identity note (Layer 0 context)");
+
+var idSetIdArg = new Argument<string>("id", "Note ID or file path");
+var idSetCmd   = new Command("set", "Designate a note as the vault identity note");
+idSetCmd.AddArgument(idSetIdArg);
+idSetCmd.SetHandler(ctx =>
+{
+    var g = G(ctx);
+    if (RequireVault(g, ctx) is not { } vault) return;
+    var outcome = new IdentityOperator(vaultReader, noteIndex).ExecuteSet(
+        vault,
+        ctx.ParseResult.GetValueForArgument(idSetIdArg));
+    ResultPrinter.Print(outcome);
+    ctx.ExitCode = outcome.Success ? 0 : 1;
+});
+identityCmd.AddCommand(idSetCmd);
+
+var idGetCmd = new Command("get", "Retrieve current identity note");
+idGetCmd.SetHandler(ctx =>
+{
+    var g = G(ctx);
+    if (RequireVault(g, ctx) is not { } vault) return;
+    ResultPrinter.Print(new IdentityOperator(vaultReader, noteIndex).ExecuteGet(vault));
+});
+identityCmd.AddCommand(idGetCmd);
+
+root.AddCommand(identityCmd);
+
 return await root.InvokeAsync(args);
 
