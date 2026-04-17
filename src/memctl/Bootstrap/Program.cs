@@ -391,6 +391,17 @@ modelCmd.AddCommand(modelUseCmd);
 
 root.AddCommand(modelCmd);
 
+// --- mcp ---
+var mcpCmd = new Command("mcp", "Start a stdio MCP server exposing the vault as an AI memory layer");
+mcpCmd.SetHandler(async ctx =>
+{
+    var g = G(ctx);
+    if (RequireVault(g, ctx) is not { } vault) return;
+    var op = new McpServerOperator(vaultReader, noteIndex, vault, g.ModelDir);
+    await op.RunAsync(ctx.GetCancellationToken());
+});
+root.AddCommand(mcpCmd);
+
 // --- weight ---
 var weightIdArg  = new Argument<string>("id", "Note ID or file path");
 var weightValArg = new Argument<string>("value", "Weight value (0.0–1.0)");
