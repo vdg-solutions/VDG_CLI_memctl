@@ -69,6 +69,16 @@ string? RequireVault(GlobalOptions g, InvocationContext ctx)
     return null;
 }
 
+// MCP mode: auto-init vault at ./vault if none found — zero-config for global MCP setup
+string RequireVaultOrInit(GlobalOptions g)
+{
+    var vault = VaultLocator.FindVault(g.Vault);
+    if (vault is not null) return vault;
+    var autoPath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "vault"));
+    vaultReader.InitVaultStructure(autoPath);
+    return autoPath;
+}
+
 // init requires explicit path — can't auto-detect a vault that doesn't exist yet
 string? RequireVaultExplicit(GlobalOptions g, InvocationContext ctx)
 {
@@ -406,9 +416,9 @@ root.AddCommand(modelCmd);
 var mcpCmd = new Command("mcp", "Start a stdio MCP server exposing the vault as an AI memory layer");
 mcpCmd.SetHandler(async ctx =>
 {
-    var g = G(ctx);
-    if (RequireVault(g, ctx) is not { } vault) return;
-    var op = new McpServerOperator(vaultReader, noteIndex, vault, g.ModelDir);
+    var g     = G(ctx);
+    var vault = RequireVaultOrInit(g);
+    var op    = new McpServerOperator(vaultReader, noteIndex, vault, g.ModelDir);
     await op.RunAsync(ctx.GetCancellationToken());
 });
 root.AddCommand(mcpCmd);
