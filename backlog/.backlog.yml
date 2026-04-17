@@ -1,0 +1,9 @@
+project: VDG_CLI_memctl
+columns:
+- Todo
+- In Progress
+- In Review
+- Done
+next_id: 6
+next_sprint_id: 1
+web_port: 5555
