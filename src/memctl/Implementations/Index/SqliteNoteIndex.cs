@@ -12,6 +12,7 @@ public sealed class SqliteNoteIndex : INoteIndex
 
     public void Initialize(string dbPath)
     {
+        if (_db is not null) return;  // already initialized (e.g. MCP long-running server)
         Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
         _db = new SqliteConnection($"Data Source={dbPath}");
         _db.Open();
