@@ -186,47 +186,56 @@ listCmd.SetHandler(ctx =>
 root.AddCommand(listCmd);
 
 // --- search (hybrid RRF) ---
-var searchQueryArg = new Argument<string>("query");
-var searchCmd      = new Command("search", "Hybrid search (BM25 + semantic, RRF fusion)");
+var searchQueryArg  = new Argument<string>("query");
+var searchFolderOpt = new Option<string?>("--folder", "Filter results to notes under this folder prefix (e.g. crypto, projects/memctl)");
+var searchCmd       = new Command("search", "Hybrid search (BM25 + semantic, RRF fusion)");
 searchCmd.AddArgument(searchQueryArg);
+searchCmd.AddOption(searchFolderOpt);
 searchCmd.SetHandler(async ctx =>
 {
-    var g = G(ctx);
+    var g      = G(ctx);
     if (RequireVault(g, ctx) is not { } vault) return;
-    var emb = await GetEmbedding(g);
-    var op  = new SearchOperator(vaultReader, noteIndex, emb);
-    ResultPrinter.Print(op.Execute(vault, ctx.ParseResult.GetValueForArgument(searchQueryArg), g.Limit));
+    var emb    = await GetEmbedding(g);
+    var op     = new SearchOperator(vaultReader, noteIndex, emb);
+    var folder = ctx.ParseResult.GetValueForOption(searchFolderOpt);
+    ResultPrinter.Print(op.Execute(vault, ctx.ParseResult.GetValueForArgument(searchQueryArg), g.Limit, folder));
 });
 root.AddCommand(searchCmd);
 
 // --- search-semantic ---
-var semQueryArg = new Argument<string>("query");
-var semScopeOpt = new Option<string?>("--scope", "Comma-separated note IDs to restrict search");
-var semCmd      = new Command("search-semantic", "Semantic vector search");
+var semQueryArg  = new Argument<string>("query");
+var semScopeOpt  = new Option<string?>("--scope",  "Comma-separated note IDs to restrict search");
+var semFolderOpt = new Option<string?>("--folder", "Filter results to notes under this folder prefix (e.g. crypto, projects/memctl)");
+var semCmd       = new Command("search-semantic", "Semantic vector search");
 semCmd.AddArgument(semQueryArg);
 semCmd.AddOption(semScopeOpt);
+semCmd.AddOption(semFolderOpt);
 semCmd.SetHandler(async ctx =>
 {
-    var g = G(ctx);
+    var g      = G(ctx);
     if (RequireVault(g, ctx) is not { } vault) return;
-    var emb   = await GetEmbedding(g);
-    var op    = new SearchSemanticOperator(vaultReader, noteIndex, emb);
-    var scope = ctx.ParseResult.GetValueForOption(semScopeOpt)
+    var emb    = await GetEmbedding(g);
+    var op     = new SearchSemanticOperator(vaultReader, noteIndex, emb);
+    var scope  = ctx.ParseResult.GetValueForOption(semScopeOpt)
         ?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-    ResultPrinter.Print(op.Execute(vault, ctx.ParseResult.GetValueForArgument(semQueryArg), g.Limit, scope));
+    var folder = ctx.ParseResult.GetValueForOption(semFolderOpt);
+    ResultPrinter.Print(op.Execute(vault, ctx.ParseResult.GetValueForArgument(semQueryArg), g.Limit, scope, folder));
 });
 root.AddCommand(semCmd);
 
 // --- search-text ---
-var stQueryArg = new Argument<string>("query");
-var stCmd      = new Command("search-text", "Full-text BM25 search");
+var stQueryArg  = new Argument<string>("query");
+var stFolderOpt = new Option<string?>("--folder", "Filter results to notes under this folder prefix (e.g. crypto, projects/memctl)");
+var stCmd       = new Command("search-text", "Full-text BM25 search");
 stCmd.AddArgument(stQueryArg);
+stCmd.AddOption(stFolderOpt);
 stCmd.SetHandler(ctx =>
 {
-    var g = G(ctx);
+    var g      = G(ctx);
     if (RequireVault(g, ctx) is not { } vault) return;
-    var op = new SearchTextOperator(vaultReader, noteIndex);
-    ResultPrinter.Print(op.Execute(vault, ctx.ParseResult.GetValueForArgument(stQueryArg), g.Limit));
+    var op     = new SearchTextOperator(vaultReader, noteIndex);
+    var folder = ctx.ParseResult.GetValueForOption(stFolderOpt);
+    ResultPrinter.Print(op.Execute(vault, ctx.ParseResult.GetValueForArgument(stQueryArg), g.Limit, folder));
 });
 root.AddCommand(stCmd);
 
