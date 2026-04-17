@@ -22,7 +22,7 @@ dotnet tool install -g memctl --add-source ./nupkg
 
 | Option | Required | Description |
 |--------|----------|-------------|
-| `--vault <path>` | Yes | Vault directory |
+| `--vault <path>` | No (auto-detected from cwd if omitted) | Vault directory — walks up from cwd looking for `.obsidian/`. Required for `init`. |
 | `--limit <n>` | No (default: 10) | Max results |
 | `--llm-url <url>` | For add/organize | OpenAI-compatible API URL |
 | `--llm-model <model>` | For add/organize | Model name |
@@ -221,8 +221,11 @@ memctl organize --vault ./vault --since 2026-03-01 --llm-url ...  # only recent 
 
 Run memctl as a stdio MCP server. Exposes 13 tools to any MCP-compatible client (Claude Code, Cursor, etc.).
 
+`--vault` is optional — memctl auto-detects the vault by walking up from the cwd where the MCP server is spawned. Place your vault (with `.obsidian/`) in the project root and the config becomes zero-config.
+
 ```bash
-memctl mcp --vault ./vault
+memctl mcp              # auto-detects vault from cwd
+memctl mcp --vault ./vault  # explicit override
 ```
 
 **Claude Code config** (`~/.claude/claude_desktop_config.json` or project `.mcp.json`):
@@ -231,7 +234,7 @@ memctl mcp --vault ./vault
   "mcpServers": {
     "memctl": {
       "command": "memctl",
-      "args": ["mcp", "--vault", "/absolute/path/to/vault"]
+      "args": ["mcp"]
     }
   }
 }

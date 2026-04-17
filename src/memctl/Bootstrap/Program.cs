@@ -58,8 +58,19 @@ OpenAiLlmClient? LlmClient(GlobalOptions g) =>
         ? new OpenAiLlmClient(g.LlmUrl, g.LlmModel, g.LlmKey)
         : null;
 
-// Vault guard — returns vault path or prints error and returns null
+// Vault guard — auto-detects vault from cwd if --vault not provided
 string? RequireVault(GlobalOptions g, InvocationContext ctx)
+{
+    var vault = VaultLocator.FindVault(g.Vault);
+    if (vault is not null) return vault;
+    ResultPrinter.Print(MemctlOutcome.Fail("error",
+        "No vault found. Create one with 'memctl init --vault <path>' or run from a directory containing a vault."));
+    ctx.ExitCode = 1;
+    return null;
+}
+
+// init requires explicit path — can't auto-detect a vault that doesn't exist yet
+string? RequireVaultExplicit(GlobalOptions g, InvocationContext ctx)
 {
     if (g.Vault is not null) return g.Vault;
     ResultPrinter.Print(MemctlOutcome.Fail("error", "--vault is required for this command"));
@@ -72,7 +83,7 @@ var initCmd = new Command("init", "Create a new Obsidian-compatible vault");
 initCmd.SetHandler(ctx =>
 {
     var g = G(ctx);
-    if (RequireVault(g, ctx) is not { } vault) return;
+    if (RequireVaultExplicit(g, ctx) is not { } vault) return;
     vaultReader.InitVaultStructure(vault);
     ResultPrinter.Print(MemctlOutcome.Ok("init", $"Vault initialized at {vault}", new { vault }));
 });
