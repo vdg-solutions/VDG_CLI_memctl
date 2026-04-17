@@ -391,5 +391,25 @@ modelCmd.AddCommand(modelUseCmd);
 
 root.AddCommand(modelCmd);
 
+// --- weight ---
+var weightIdArg  = new Argument<string>("id", "Note ID or file path");
+var weightValArg = new Argument<string>("value", "Weight value (0.0–1.0)");
+var weightCmd    = new Command("weight", "Set importance weight for a note (0.0–1.0)");
+weightCmd.AddArgument(weightIdArg);
+weightCmd.AddArgument(weightValArg);
+weightCmd.SetHandler(ctx =>
+{
+    var g = G(ctx);
+    if (RequireVault(g, ctx) is not { } vault) return;
+    var pr      = ctx.ParseResult;
+    var outcome = new WeightOperator(vaultReader, noteIndex).Execute(
+        vault,
+        pr.GetValueForArgument(weightIdArg),
+        pr.GetValueForArgument(weightValArg));
+    ResultPrinter.Print(outcome);
+    ctx.ExitCode = outcome.Success ? 0 : 1;
+});
+root.AddCommand(weightCmd);
+
 return await root.InvokeAsync(args);
 

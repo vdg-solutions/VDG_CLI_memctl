@@ -17,6 +17,8 @@ public interface INoteIndex : IDisposable
     IReadOnlyList<Note> GetLinked(string noteId, int depth);
     IReadOnlyList<(string Tag, int Count)> GetTagStats();
     (int NoteCount, int TagCount, int LinkCount, long IndexBytes) GetStats();
-    void   SetMetadata(string key, string value);
+    void    SetWeight(string noteId, float weight);
+    void    IncrementAccess(string noteId);
+    void    SetMetadata(string key, string value);
     string? GetMetadata(string key);
 }
