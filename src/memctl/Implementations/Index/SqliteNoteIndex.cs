@@ -20,10 +20,11 @@ public sealed class SqliteNoteIndex : INoteIndex
 
     public void Upsert(Note note)
     {
-        var tagsJson     = JsonSerializer.Serialize(note.Tags);
-        var linksJson    = JsonSerializer.Serialize(note.Links);
+        var tagsJson       = JsonSerializer.Serialize(note.Tags);
+        var linksJson      = JsonSerializer.Serialize(note.Links);
         var embeddingBytes = EmbeddingToBytes(note.Embedding);
 
+        // weight and access_count excluded from UPDATE — preserve user-set values on re-ingest
         Exec(@"
             INSERT INTO notes (id, file_path, title, content, tags, links, created_at, modified_at, embedding)
             VALUES (@id, @fp, @title, @content, @tags, @links, @created, @modified, @emb)
@@ -56,7 +57,7 @@ public sealed class SqliteNoteIndex : INoteIndex
         QueryOne("SELECT * FROM notes WHERE file_path = @fp", ("@fp", filePath));
 
     public IReadOnlyList<Note> GetAll() =>
-        QueryMany("SELECT * FROM notes ORDER BY created_at DESC");
+        QueryMany("SELECT * FROM notes ORDER BY weight DESC, access_count DESC");
 
     public IReadOnlyList<SearchHit> SearchBm25(string query, int limit, string? folderPrefix = null)
     {
@@ -231,6 +232,15 @@ public sealed class SqliteNoteIndex : INoteIndex
         return (noteCount, tagCount, linkCount, bytes);
     }
 
+    public void SetWeight(string noteId, float weight)
+    {
+        var clamped = Math.Clamp(weight, 0.0f, 1.0f);
+        Exec("UPDATE notes SET weight = @w WHERE id = @id", ("@w", clamped), ("@id", noteId));
+    }
+
+    public void IncrementAccess(string noteId) =>
+        Exec("UPDATE notes SET access_count = access_count + 1 WHERE id = @id", ("@id", noteId));
+
     public void Dispose() => _db?.Dispose();
 
     public void SetMetadata(string key, string value) =>
@@ -278,6 +288,19 @@ public sealed class SqliteNoteIndex : INoteIndex
             INSERT INTO notes_fts(notes_fts, rowid, id, title, content)
             VALUES ('delete', old.rowid, old.id, old.title, old.content);
         END");
+
+        // idempotent column migrations for existing databases
+        MigrateAddColumn("weight",       "REAL    NOT NULL DEFAULT 0.0");
+        MigrateAddColumn("access_count", "INTEGER NOT NULL DEFAULT 0");
+    }
+
+    private void MigrateAddColumn(string column, string definition)
+    {
+        using var check = Cmd(
+            "SELECT COUNT(*) FROM pragma_table_info('notes') WHERE name = @col",
+            ("@col", column));
+        if ((long)check.ExecuteScalar()! > 0) return;
+        ExecOne($"ALTER TABLE notes ADD COLUMN {column} {definition}");
     }
 
     // --- helpers ---
@@ -336,17 +359,22 @@ public sealed class SqliteNoteIndex : INoteIndex
         if (!r.IsDBNull(embCol))
             embedding = BytesToEmbedding((byte[])r.GetValue(embCol));
 
+        var weightCol      = r.GetOrdinal("weight");
+        var accessCountCol = r.GetOrdinal("access_count");
+
         return new Note
         {
-            Id        = r.GetString(r.GetOrdinal("id")),
-            FilePath  = r.GetString(r.GetOrdinal("file_path")),
-            Title     = r.GetString(r.GetOrdinal("title")),
-            Content   = r.GetString(r.GetOrdinal("content")),
-            Tags      = tags,
-            Links     = links,
-            Created   = DateTime.Parse(r.GetString(r.GetOrdinal("created_at"))).ToUniversalTime(),
-            Modified  = DateTime.Parse(r.GetString(r.GetOrdinal("modified_at"))).ToUniversalTime(),
-            Embedding = embedding,
+            Id          = r.GetString(r.GetOrdinal("id")),
+            FilePath    = r.GetString(r.GetOrdinal("file_path")),
+            Title       = r.GetString(r.GetOrdinal("title")),
+            Content     = r.GetString(r.GetOrdinal("content")),
+            Tags        = tags,
+            Links       = links,
+            Created     = DateTime.Parse(r.GetString(r.GetOrdinal("created_at"))).ToUniversalTime(),
+            Modified    = DateTime.Parse(r.GetString(r.GetOrdinal("modified_at"))).ToUniversalTime(),
+            Embedding   = embedding,
+            Weight      = r.IsDBNull(weightCol)      ? 0.0f : (float)r.GetDouble(weightCol),
+            AccessCount = r.IsDBNull(accessCountCol) ? 0    : r.GetInt32(accessCountCol),
         };
     }
 
