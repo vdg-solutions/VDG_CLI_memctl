@@ -136,6 +136,31 @@ public sealed class McpServerOperator(
                     "Retrieve the vault identity note — load this first in every session for context",
                     req: [],
                     opt: []),
+
+                MakeTool("create",
+                    "Create a new note in the vault and index it immediately",
+                    req: [("content", "string", "Note body text")],
+                    opt: [("title",    "string",  "Note title (extracted from content if omitted)"),
+                          ("folder",   "string",  "Subfolder path relative to vault root (e.g. notes)"),
+                          ("filename", "string",  "Filename without extension (default: sanitized title)")]),
+
+                MakeTool("update",
+                    "Replace the content of an existing note by ID or file path",
+                    req: [("id",      "string", "Note ID or relative file path"),
+                          ("content", "string", "New note body text")],
+                    opt: []),
+
+                MakeTool("append",
+                    "Append text to an existing note without overwriting existing content",
+                    req: [("id",      "string", "Note ID or relative file path"),
+                          ("content", "string", "Text to append")],
+                    opt: []),
+
+                MakeTool("set_weight",
+                    "Set note importance weight (0.0-1.0); affects list order",
+                    req: [("id",     "string", "Note ID or relative file path"),
+                          ("weight", "number", "Importance weight 0.0-1.0")],
+                    opt: []),
             },
         },
     };
@@ -160,6 +185,10 @@ public sealed class McpServerOperator(
                 "search_date"     => CallSearchDate(args),
                 "search_links"    => CallSearchLinks(args),
                 "get_identity"    => CallGetIdentity(),
+                "create"          => await CallCreateAsync(args, ct),
+                "update"          => await CallUpdateAsync(args, ct),
+                "append"          => await CallAppendAsync(args, ct),
+                "set_weight"      => CallSetWeight(args),
                 _                 => null,
             };
 
@@ -346,4 +375,50 @@ public sealed class McpServerOperator(
         && args.TryGetProperty(key, out var v)
         && v.ValueKind == JsonValueKind.Number
             ? v.GetInt32() : defaultVal;
+
+    private static float? FloatArg(JsonElement args, string key) =>
+        args.ValueKind != JsonValueKind.Undefined
+        && args.TryGetProperty(key, out var v)
+        && v.ValueKind == JsonValueKind.Number
+            ? v.GetSingle() : null;
+
+    // --- write tool implementations ---
+
+    private async Task<MemctlOutcome> CallCreateAsync(JsonElement args, CancellationToken _)
+    {
+        var content  = Str(args, "content")  ?? throw new InvalidOperationException("'content' is required");
+        var title    = Str(args, "title");
+        var folder   = Str(args, "folder");
+        var filename = Str(args, "filename");
+        var emb      = await GetEmbeddingAsync().ConfigureAwait(false);
+        return new VaultWriteOperator(vaultReader, index, emb).ExecuteCreate(vaultPath, content, title, folder, filename);
+    }
+
+    private async Task<MemctlOutcome> CallUpdateAsync(JsonElement args, CancellationToken _)
+    {
+        var id      = Str(args, "id")      ?? throw new InvalidOperationException("'id' is required");
+        var content = Str(args, "content") ?? throw new InvalidOperationException("'content' is required");
+        var emb     = await GetEmbeddingAsync().ConfigureAwait(false);
+        return new VaultWriteOperator(vaultReader, index, emb).ExecuteUpdate(vaultPath, id, content);
+    }
+
+    private async Task<MemctlOutcome> CallAppendAsync(JsonElement args, CancellationToken _)
+    {
+        var id      = Str(args, "id")      ?? throw new InvalidOperationException("'id' is required");
+        var content = Str(args, "content") ?? throw new InvalidOperationException("'content' is required");
+        var emb     = await GetEmbeddingAsync().ConfigureAwait(false);
+        return new VaultWriteOperator(vaultReader, index, emb).ExecuteAppend(vaultPath, id, content);
+    }
+
+    private MemctlOutcome CallSetWeight(JsonElement args)
+    {
+        var id     = Str(args,      "id")     ?? throw new InvalidOperationException("'id' is required");
+        var weight = FloatArg(args, "weight") ?? throw new InvalidOperationException("'weight' is required");
+        var note   = index.GetById(id) ?? index.GetByFilePath(id);
+        if (note is null) return MemctlOutcome.Fail("set_weight", $"Note not found: {id}");
+        var clamped = Math.Clamp(weight, 0f, 1f);
+        index.SetWeight(note.Id, clamped);
+        return MemctlOutcome.Ok("set_weight", $"Weight set to {(float)Math.Round(clamped, 2)}",
+            new { id = note.Id, file = note.FilePath, weight = (float)Math.Round(clamped, 2) });
+    }
 }
