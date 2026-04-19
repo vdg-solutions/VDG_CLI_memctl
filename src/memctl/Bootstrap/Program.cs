@@ -474,6 +474,41 @@ identityCmd.AddCommand(idGetCmd);
 
 root.AddCommand(identityCmd);
 
+// --- context-inject ---
+var ciDryRunOpt      = new Option<bool>("--dry-run", "Same as live run (read-only command)");
+var contextInjectCmd = new Command("context-inject", "Inject relevant vault context for UserPromptSubmit hook");
+contextInjectCmd.AddOption(ciDryRunOpt);
+contextInjectCmd.SetHandler(async ctx =>
+{
+    try
+    {
+        var g = G(ctx);
+
+        if (!Console.IsInputRedirected) { ctx.ExitCode = 0; return; }
+
+        string stdinText;
+        try   { stdinText = await Console.In.ReadToEndAsync(); }
+        catch { ctx.ExitCode = 0; return; }
+
+        if (string.IsNullOrWhiteSpace(stdinText)) { ctx.ExitCode = 0; return; }
+
+        stdinText = ExtractPromptText(stdinText);
+        if (string.IsNullOrWhiteSpace(stdinText)) { ctx.ExitCode = 0; return; }
+
+        var vaultPath = VaultLocator.FindVault(g.Vault);
+        if (vaultPath is null) { ctx.ExitCode = 0; return; }
+
+        var context = new ContextInjectOperator(vaultReader, noteIndex)
+            .Execute(vaultPath, stdinText);
+
+        if (context is not null)
+            Console.Write(context);
+    }
+    catch { /* NFR-002: never crash hook */ }
+    ctx.ExitCode = 0;
+});
+root.AddCommand(contextInjectCmd);
+
 // --- capture ---
 var capRoleOpt    = new Option<string?>("--role",       "Turn role (user | assistant) — direct mode");
 var capTextOpt    = new Option<string?>("--text",       "Turn content — direct mode");
@@ -551,6 +586,26 @@ captureCmd.SetHandler(async ctx =>
 root.AddCommand(captureCmd);
 
 return await root.InvokeAsync(args);
+
+// Extract plain-text prompt from stdin — plain text or first string field from JSON
+static string ExtractPromptText(string raw)
+{
+    var trimmed = raw.TrimStart();
+    if (!trimmed.StartsWith('{') && !trimmed.StartsWith('[')) return raw;
+    try
+    {
+        using var doc = JsonDocument.Parse(trimmed);
+        if (doc.RootElement.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var prop in doc.RootElement.EnumerateObject())
+                if (prop.Value.ValueKind == JsonValueKind.String)
+                    return prop.Value.GetString() ?? "";
+            return ""; // JSON with no string fields
+        }
+    }
+    catch { /* not valid JSON — use raw */ }
+    return raw;
+}
 
 // Hook Protocol v1 payload DTOs
 internal sealed record CapturePayload(
