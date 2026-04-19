@@ -39,7 +39,19 @@ memctl weight <id> 1.5
 memctl add --title "Session: <date> — <task>" --content "<summary of what was done, decided, left open>"
 ```
 
-> **Coming in roadmap G1+G2:** This protocol will run automatically via Claude Code hooks — capture without remembering to capture, recall without remembering to recall.
+### Periodic maintenance (Lint) — run weekly or when vault feels noisy
+```bash
+# Coming G3 — not yet implemented:
+memctl lint                 # → report: orphans, duplicates, broken links, isolated notes
+# Bot reads report → merges duplicates, fixes broken links, boosts or deletes orphans
+
+# Coming G5:
+memctl decay --days 30      # → reduce weight of notes not touched in N days
+```
+
+Until G3 ships, manually ask the bot: *"Review my vault and clean up duplicates/orphans."*
+
+> **Coming in roadmap G1+G2:** This full protocol will run automatically via Claude Code hooks — capture without remembering to capture, recall without remembering to recall.
 
 ---
 
