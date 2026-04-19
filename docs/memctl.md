@@ -51,7 +51,12 @@ memctl ingest
 # ingest output includes hint when overdue:
 # → {"semantic_lint": {"days_since": 9, "overdue": true, "hint": "Run: memctl lint --semantic ..."}}
 
-# Manual semantic lint via proxy:
+# Manual semantic lint — bot does it itself (no external LLM):
+memctl lint --semantic --self
+# → outputs all notes as structured prompt to stdout
+# → bot reads, reasons, calls `memctl create` to save lint report
+
+# Manual semantic lint — via VDG proxy:
 memctl lint --semantic \
   --llm-url http://127.0.0.1:1234/v1 \
   --llm-model gemma4:31b-cloud \
@@ -522,7 +527,10 @@ Bộ nhớ con người không cần effort: ký ức hình thành tự động,
 ```bash
 memctl ingest   # structural free + semantic auto khi overdue
 
-# Manual — via VDG proxy:
+# Manual — bot tự xử lý (không cần external LLM):
+memctl lint --semantic --self   # dump notes as prompt → bot reasons → bot saves report
+
+# Manual — via VDG proxy (scheduled/background):
 memctl lint --semantic \
   --llm-url http://127.0.0.1:1234/v1 \
   --llm-model gemma4:31b-cloud \
