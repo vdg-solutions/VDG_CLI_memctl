@@ -352,3 +352,6 @@ dist/
 .memctl/
 
 .autoresearch/
+
+# QC short-term artifacts
+.claude/memory/short/
