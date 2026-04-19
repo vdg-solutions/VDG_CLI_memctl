@@ -1,12 +1,45 @@
 ---
 name: memctl
-description: Personal memory vault CLI backed by an Obsidian-compatible markdown vault. Use when the user asks about their notes, wants to save a thought, or needs to query their knowledge base. All commands output structured JSON.
+description: Your persistent memory system across sessions. Use at session start to recall prior context, during work to capture decisions and findings, at session end to consolidate. Memory persists in an Obsidian-compatible vault — searchable, weighted by importance, and shared across all projects.
 allowed-tools: Bash
 ---
 
-# memctl — Personal Memory Vault CLI
+# memctl — Bot Memory System
 
-Manages an Obsidian-compatible vault of markdown notes. Each command is an atomic tool — combine them to answer complex questions about the vault.
+You have persistent memory. It survives across sessions, across projects, across context resets. Use it.
+
+**The model:** You encode what matters → vault stores it → you recall it next session → periodic consolidation keeps it clean → old memories decay unless reinforced. Like human long-term memory.
+
+**The vault:** Obsidian-compatible markdown files on disk. Human-readable, git-friendly, searchable by meaning (semantic) and keyword (BM25). Each note has an importance weight — higher weight = surfaces first in recall.
+
+---
+
+## Memory Protocol — What to do every session
+
+### Session start (Recall)
+```bash
+memctl status                           # vault healthy? model ready?
+memctl ingest                           # re-index if new files added outside Claude
+memctl list --limit 10                  # load top memories by importance
+memctl search "<current task keywords>" # surface relevant prior decisions
+```
+
+### During session (Encode)
+```bash
+# After a decision, finding, or discovered pattern:
+memctl add --title "Decision: use X over Y" --content "Rationale: ..."
+memctl append --id <note-id> --content "Update: discovered edge case..."
+
+# Boost notes that will matter next session:
+memctl weight <id> 1.5
+```
+
+### Session end (Consolidate)
+```bash
+memctl add --title "Session: <date> — <task>" --content "<summary of what was done, decided, left open>"
+```
+
+> **Coming in roadmap G1+G2:** This protocol will run automatically via Claude Code hooks — capture without remembering to capture, recall without remembering to recall.
 
 ---
 
@@ -67,6 +100,10 @@ memctl status --vault ./vault
 
 ## Commands
 
+Commands grouped by memory operation. All output structured JSON.
+
+### — Setup & Health —
+
 ### `status`
 Check readiness. Run this first — does not require model or index to be present.
 ```bash
@@ -99,6 +136,8 @@ Create a new vault with `.obsidian/` and `.memctl/` structure.
 memctl init --vault ./my-vault
 ```
 
+### — Encode (write to memory) —
+
 ### `ingest`
 Index all `.md` files in vault into SQLite + compute embeddings. Run after adding notes outside memctl, or first time on existing vault.
 ```bash
@@ -125,6 +164,8 @@ List notes, optionally filtered by tag.
 memctl list --vault ./vault --limit 20
 memctl list --vault ./vault --tag crypto
 ```
+
+### — Recall (read from memory) —
 
 ### Search — Quick pick
 
@@ -194,6 +235,10 @@ Vault overview: note count, tag count, link count, index size.
 ```bash
 memctl stats --vault ./vault
 ```
+
+### — Inspect (observe memory structure) —
+
+### — Maintain (memory health) —
 
 ### `weight <id> <value>`
 Set importance weight. Affects `list` sort order — higher weight = appears first. Default is `1.0`. Use `0.0` to deprioritize, `> 1.0` to protect from future temporal decay.
@@ -417,13 +462,13 @@ memctl search-semantic "<query>" --vault ./vault --scope <tag-result-ids>
 
 ---
 
-## Roadmap — "Bot có ký ức về mọi thứ"
+## Roadmap — Từ "có thể nhớ" → "nhớ như con người"
 
-memctl hiện tại đủ cho **query** (search, list, get) và **write** (create, update, append). Để đạt universal bot memory — nơi bot tích lũy ký ức **về mọi thứ cần nhớ** qua mọi session — còn 5 gap cần giải:
+Bộ nhớ con người không cần effort: ký ức hình thành tự động, được recall khi liên quan, phai mờ theo thời gian nếu không dùng đến. memctl hiện tại yêu cầu bot chủ động — gọi `list`, gọi `search`, gọi `add`. Roadmap này loại bỏ từng friction point đó.
 
-> "Cần nhớ" = decisions, findings, patterns, user preferences, bugs, rationale. Không phải mọi exchange đều cần lưu — auto-capture nên filter signal khỏi noise. G5 (decay) là cơ chế tự nhiên giữ vault focused vào những gì còn relevant.
+> "Cần nhớ" = decisions, findings, patterns, user preferences, bug rationale. Không phải mọi exchange — auto-capture filter signal khỏi noise. G5 (decay) là quá trình quên tự nhiên: những gì không được dùng đến sẽ chìm xuống.
 
-### G1 — Auto-capture (P0)
+### G1 — Auto-capture: ký ức hình thành tự động (P0)
 
 **Vấn đề:** Bot phải chủ động gọi `create`/`append` để lưu memory. Nó thường quên.
 
@@ -434,7 +479,7 @@ memctl hiện tại đủ cho **query** (search, list, get) và **write** (creat
 { "hooks": { "Stop": [{ "hooks": [{ "type": "command", "command": "memctl add-turn --auto" }] }] } }
 ```
 
-### G2 — Proactive injection (P0)
+### G2 — Proactive injection: ký ức tự được recall khi liên quan (P0)
 
 **Vấn đề:** Bot phải chủ động gọi `list`/`search` để load context — nó có thể skip.
 
@@ -444,7 +489,7 @@ memctl hiện tại đủ cho **query** (search, list, get) và **write** (creat
 { "hooks": { "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "memctl context-inject" }] }] } }
 ```
 
-### G3 — Structural lint (P1)
+### G3 — Structural lint: vệ sinh ký ức (P1)
 
 **Vấn đề:** Notes tích lũy theo thời gian không được health-check — orphans, duplicates, dead links.
 
@@ -455,7 +500,7 @@ memctl lint --vault ./vault
 → {"orphans": [...], "duplicates": [...], "broken_links": [...], "no_inbound": [...]}
 ```
 
-### G4 — Source fetch (P2)
+### G4 — Source fetch: học từ nguồn bên ngoài (P2)
 
 **Vấn đề:** Không có cách fetch raw source (URL/file) để bot synthesize vào vault.
 
@@ -465,7 +510,7 @@ memctl lint --vault ./vault
 memctl fetch "https://example.com/article" | # → bot reads, creates notes
 ```
 
-### G5 — Temporal decay (P1)
+### G5 — Temporal decay: quên tự nhiên (P1)
 
 **Vấn đề:** Old notes không decay → cạnh tranh với fresh notes trong search results. Vault trở nên noisy theo thời gian.
 
