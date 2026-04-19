@@ -52,21 +52,23 @@ public sealed class IngestOperator(IVaultReader vault, INoteIndex index, GemmaEm
         var lastLint = index.GetMetadata("last_semantic_lint");
         if (lastLint is null)
         {
-            semanticHint = "Semantic lint has never run. Run: memctl lint --semantic";
+            semanticHint = "Semantic lint: never run. Run: memctl lint --semantic";
         }
         else if (DateTime.TryParse(lastLint, null, System.Globalization.DateTimeStyles.RoundtripKind, out var lastLintDate))
         {
             var daysSince = (DateTime.UtcNow - lastLintDate).TotalDays;
             if (daysSince > SemanticOverdueDays)
-                semanticHint = $"Semantic lint last ran {(int)daysSince} days ago. Run: memctl lint --semantic";
+                semanticHint = $"Semantic lint not run in {(int)daysSince} days. Run: memctl lint --semantic";
         }
         else
         {
-            semanticHint = "Semantic lint has never run. Run: memctl lint --semantic";
+            semanticHint = "Semantic lint: never run. Run: memctl lint --semantic";
         }
 
-        return MemctlOutcome.Ok("ingest", $"Indexed {added}/{files.Count} notes",
-            new { indexed = added, total = files.Count, vault = vaultPath, model, semantic_lint_hint = semanticHint });
+        object resultData = semanticHint is not null
+            ? new { indexed = added, total = files.Count, vault = vaultPath, model, semantic_lint_hint = semanticHint }
+            : new { indexed = added, total = files.Count, vault = vaultPath, model };
+        return MemctlOutcome.Ok("ingest", $"Indexed {added}/{files.Count} notes", resultData);
     }
 
     public static bool NeedsIngest(string vaultPath)

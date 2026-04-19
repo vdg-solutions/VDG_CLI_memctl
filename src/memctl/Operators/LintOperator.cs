@@ -1,13 +1,12 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Memctl.CoreAbstractions.Entities;
 using Memctl.CoreAbstractions.Ports;
 
 namespace Memctl.Operators;
 
-public sealed record LintOptions(
+internal sealed record LintOptions(
     bool    Semantic,
     bool    Self,
     bool    DryRun,
@@ -30,7 +29,7 @@ public sealed class LintOperator(IVaultReader vaultReader, INoteIndex index)
     private const string LastSemanticLintKey    = "last_semantic_lint";
     private const int    SemanticOverdueDays    = 14;
 
-    public async Task<(MemctlOutcome outcome, int exitCode)> ExecuteAsync(string vaultPath, LintOptions opts)
+    internal async Task<(MemctlOutcome outcome, int exitCode)> ExecuteAsync(string vaultPath, LintOptions opts)
     {
         index.Initialize(IngestOperator.DbPath(vaultPath));
 
@@ -43,7 +42,7 @@ public sealed class LintOperator(IVaultReader vaultReader, INoteIndex index)
         }
 
         // validate semantic flag combos
-        if (opts.Semantic && opts.Self && opts.LlmUrl is not null)
+        if (opts.Self && opts.LlmUrl is not null)
             return (MemctlOutcome.Fail("lint", "--self and --llm-url are mutually exclusive"), 1);
 
         if (opts.Semantic && !opts.Self && (opts.LlmUrl is null || opts.LlmModel is null))
