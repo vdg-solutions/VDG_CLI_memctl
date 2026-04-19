@@ -196,15 +196,18 @@ getCmd.SetHandler(ctx =>
 root.AddCommand(getCmd);
 
 // --- list ---
-var listTagOpt = new Option<string?>("--tag", "Filter by tag");
-var listCmd    = new Command("list", "List notes");
+var listTagOpt            = new Option<string?>("--tag",              "Filter by tag");
+var listIncludeArchiveOpt = new Option<bool>   ("--include-archived", "Include archived notes");
+var listCmd               = new Command("list", "List notes");
 listCmd.AddOption(listTagOpt);
+listCmd.AddOption(listIncludeArchiveOpt);
 listCmd.SetHandler(ctx =>
 {
-    var g = G(ctx);
+    var g               = G(ctx);
     if (RequireVault(g, ctx) is not { } vault) return;
-    var op = new ListOperator(vaultReader, noteIndex);
-    ResultPrinter.Print(op.Execute(vault, ctx.ParseResult.GetValueForOption(listTagOpt), g.Limit));
+    var includeArchived = ctx.ParseResult.GetValueForOption(listIncludeArchiveOpt);
+    var op              = new ListOperator(vaultReader, noteIndex);
+    ResultPrinter.Print(op.Execute(vault, ctx.ParseResult.GetValueForOption(listTagOpt), g.Limit, includeArchived));
 });
 root.AddCommand(listCmd);
 
@@ -427,8 +430,8 @@ root.AddCommand(mcpCmd);
 
 // --- weight ---
 var weightIdArg  = new Argument<string>("id", "Note ID or file path");
-var weightValArg = new Argument<string>("value", "Weight value (0.0–1.0)");
-var weightCmd    = new Command("weight", "Set importance weight for a note (0.0–1.0)");
+var weightValArg = new Argument<string>("value", "Weight value (0.0–2.0)");
+var weightCmd    = new Command("weight", "Set importance weight for a note (0.0–2.0)");
 weightCmd.AddArgument(weightIdArg);
 weightCmd.AddArgument(weightValArg);
 weightCmd.SetHandler(ctx =>
@@ -444,6 +447,28 @@ weightCmd.SetHandler(ctx =>
     ctx.ExitCode = outcome.Success ? 0 : 1;
 });
 root.AddCommand(weightCmd);
+
+// --- decay ---
+var decayDaysOpt   = new Option<int>   ("--days",         "Age threshold in days") { IsRequired = true };
+var decayFactorOpt = new Option<double>("--decay-factor", () => 0.9, "Multiplicative decay factor (default 0.9)");
+var decayDryRunOpt = new Option<bool>  ("--dry-run",      "Simulate — no weight changes");
+var decayCmd       = new Command("decay", "Apply temporal decay to stale vault notes");
+decayCmd.AddOption(decayDaysOpt);
+decayCmd.AddOption(decayFactorOpt);
+decayCmd.AddOption(decayDryRunOpt);
+decayCmd.SetHandler(ctx =>
+{
+    var g      = G(ctx);
+    if (RequireVault(g, ctx) is not { } vault) return;
+    var pr     = ctx.ParseResult;
+    var days   = pr.GetValueForOption(decayDaysOpt);
+    var factor = (float)pr.GetValueForOption(decayFactorOpt);
+    var dryRun = pr.GetValueForOption(decayDryRunOpt);
+    var outcome = new DecayOperator(vaultReader, noteIndex).Execute(vault, days, factor, dryRun);
+    ResultPrinter.Print(outcome);
+    ctx.ExitCode = outcome.Success ? 0 : 1;
+});
+root.AddCommand(decayCmd);
 
 // --- identity ---
 var identityCmd = new Command("identity", "Manage vault identity note (Layer 0 context)");

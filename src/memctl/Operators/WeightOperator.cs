@@ -20,7 +20,7 @@ public sealed class WeightOperator(IVaultReader vaultReader, INoteIndex index)
         if (note is null)
             return MemctlOutcome.Fail("weight", $"Note not found: {idOrPath}");
 
-        var clamped = Math.Clamp(parsed, 0.0f, 1.0f);
+        var clamped = Math.Clamp(parsed, 0.0f, 2.0f);
         index.SetWeight(note.Id, clamped);
 
         return MemctlOutcome.Ok("weight", $"Weight set to {(float)Math.Round(clamped, 2)}", new
