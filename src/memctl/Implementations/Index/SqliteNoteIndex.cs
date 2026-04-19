@@ -25,10 +25,10 @@ public sealed class SqliteNoteIndex : INoteIndex
         var linksJson      = JsonSerializer.Serialize(note.Links);
         var embeddingBytes = EmbeddingToBytes(note.Embedding);
 
-        // weight and access_count excluded from UPDATE — preserve user-set values on re-ingest
+        // weight in INSERT (sets initial value) but excluded from UPDATE — preserve user-set values on re-ingest
         Exec(@"
-            INSERT INTO notes (id, file_path, title, content, tags, links, created_at, modified_at, embedding)
-            VALUES (@id, @fp, @title, @content, @tags, @links, @created, @modified, @emb)
+            INSERT INTO notes (id, file_path, title, content, tags, links, created_at, modified_at, embedding, weight)
+            VALUES (@id, @fp, @title, @content, @tags, @links, @created, @modified, @emb, @weight)
             ON CONFLICT(id) DO UPDATE SET
                 file_path   = excluded.file_path,
                 title       = excluded.title,
@@ -45,7 +45,8 @@ public sealed class SqliteNoteIndex : INoteIndex
             ("@links",   linksJson),
             ("@created", note.Created.ToString("O")),
             ("@modified",note.Modified.ToString("O")),
-            ("@emb",     (object?)embeddingBytes ?? DBNull.Value));
+            ("@emb",     (object?)embeddingBytes ?? DBNull.Value),
+            ("@weight",  note.Weight));
     }
 
     public void Delete(string noteId) =>

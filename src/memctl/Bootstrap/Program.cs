@@ -1,4 +1,6 @@
 using System.CommandLine;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.CommandLine.Invocation;
 using Memctl.Bootstrap;
 using Memctl.Boundary.Options;
@@ -472,5 +474,92 @@ identityCmd.AddCommand(idGetCmd);
 
 root.AddCommand(identityCmd);
 
+// --- capture ---
+var capRoleOpt    = new Option<string?>("--role",       "Turn role (user | assistant) — direct mode");
+var capTextOpt    = new Option<string?>("--text",       "Turn content — direct mode");
+var capSessionOpt = new Option<string?>("--session-id", "Session ID override");
+var capDryRunOpt  = new Option<bool>   ("--dry-run",    "Print what would be saved; no disk write");
+var captureCmd     = new Command("capture", "Auto-capture conversation turns (Hook Protocol v1)");
+var captureJsonOpts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+captureCmd.AddOption(capRoleOpt);
+captureCmd.AddOption(capTextOpt);
+captureCmd.AddOption(capSessionOpt);
+captureCmd.AddOption(capDryRunOpt);
+captureCmd.SetHandler(async ctx =>
+{
+    try
+    {
+        var pr     = ctx.ParseResult;
+        var role   = pr.GetValueForOption(capRoleOpt);
+        var text   = pr.GetValueForOption(capTextOpt);
+        var sesId  = pr.GetValueForOption(capSessionOpt);
+        var dryRun = pr.GetValueForOption(capDryRunOpt);
+        var g      = G(ctx);
+
+        // Direct mode: --role / --text
+        if (role is not null || text is not null)
+        {
+            if (role is null || text is null)
+            {
+                Console.WriteLine("""{"success":false,"action":"capture","message":"--role and --text are both required for direct mode"}""");
+                ctx.ExitCode = 1;
+                return;
+            }
+            var vault = VaultLocator.FindVault(g.Vault);
+            if (vault is null) { ctx.ExitCode = 0; return; }
+            GemmaEmbeddingEngine? emb = null;
+            try   { emb = await GetEmbedding(g); }
+            catch { /* embedding optional */ }
+            var turns  = new (string Role, string Content)[] { (role, text) };
+            var op     = new CaptureOperator(vaultReader, noteIndex, emb);
+            var result = op.Execute(vault, sesId, turns, dryRun);
+            if (dryRun) ResultPrinter.Print(result);
+            ctx.ExitCode = 0;
+            return;
+        }
+
+        // Hook mode: read stdin
+        if (!Console.IsInputRedirected) { ctx.ExitCode = 0; return; }
+
+        string stdinText;
+        try   { stdinText = await Console.In.ReadToEndAsync(); }
+        catch { ctx.ExitCode = 0; return; }
+
+        CapturePayload? payload;
+        try   { payload = JsonSerializer.Deserialize<CapturePayload>(stdinText, captureJsonOpts); }
+        catch { ctx.ExitCode = 0; return; }
+
+        if (payload is null) { ctx.ExitCode = 0; return; }
+        if (payload.Transcript is null or { Length: 0 }) { ctx.ExitCode = 0; return; }
+
+        var cwd       = payload.Cwd ?? Directory.GetCurrentDirectory();
+        var vaultPath = VaultLocator.FindVaultFrom(cwd);
+        if (vaultPath is null) { ctx.ExitCode = 0; return; }
+
+        GemmaEmbeddingEngine? emb2 = null;
+        try   { emb2 = await GetEmbedding(g); }
+        catch { /* embedding optional */ }
+
+        var turns2 = payload.Transcript.Select(t => (t.Role, t.Content)).ToArray();
+        var op2    = new CaptureOperator(vaultReader, noteIndex, emb2);
+        var res    = op2.Execute(vaultPath, payload.SessionId ?? sesId, turns2, dryRun);
+        if (dryRun) ResultPrinter.Print(res);
+    }
+    catch { /* NFR-002: never crash hook */ }
+    ctx.ExitCode = 0;
+});
+root.AddCommand(captureCmd);
+
 return await root.InvokeAsync(args);
+
+// Hook Protocol v1 payload DTOs
+internal sealed record CapturePayload(
+    [property: JsonPropertyName("session_id")] string?           SessionId,
+    [property: JsonPropertyName("cwd")]        string?           Cwd,
+    [property: JsonPropertyName("transcript")] TranscriptTurn[]? Transcript);
+
+internal sealed record TranscriptTurn(
+    [property: JsonPropertyName("role")]    string Role,
+    [property: JsonPropertyName("content")] string Content);
+
 

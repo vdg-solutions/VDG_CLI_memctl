@@ -1,4 +1,20 @@
 
+### [2026-04-19] — sqlite_upsert_weight_not_inserted (task 11)
+- Severity: high
+- Triggers: [upsert, weight, sqlite, noteindex, insert, capture, session]
+- Pattern: `SqliteNoteIndex.Upsert` INSERT statement omitted the `weight` column — all new notes landed in DB with weight=0.0 regardless of what was set on the Note record. The ON CONFLICT UPDATE correctly excluded weight, but the INSERT needed to include it so initial weights (e.g., 0.5 for session notes) are persisted.
+- Fix: Add `weight` to the INSERT column list and `@weight` parameter. ON CONFLICT UPDATE remains unchanged (still excludes weight to preserve user edits on re-ingest).
+- Hit count: 1
+- Source: QC task #11
+
+### [2026-04-19] — auto_session_id_double_date (task 11)
+- Severity: normal
+- Triggers: [session_id, generate, filename, capture, date]
+- Pattern: `GenerateSessionId()` returned `{date}-{hash}`, but the file path template already prepends the date as `sessions/{date}-{safeId}.md`. Result: `sessions/2026-04-19-2026-04-19-abc123.md` (double date).
+- Fix: `GenerateSessionId()` returns only the random hash `Guid.NewGuid().ToString("N")[..8]`. Date is added by the path template.
+- Hit count: 1
+- Source: QC task #11
+
 ### [2026-04-17] — mcp_serverinfo_instructions_injection (autoresearch task 6)
 - Severity: high
 - Triggers: [mcp, initialize, serverInfo, instructions, identity, context]
