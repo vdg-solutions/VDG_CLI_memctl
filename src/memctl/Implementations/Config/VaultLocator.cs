@@ -24,4 +24,19 @@ public static class VaultLocator
             dir = parent.FullName;
         }
     }
+
+    // Walk up from startDir — used by capture to detect vault from Hook Protocol v1 cwd field
+    public static string? FindVaultFrom(string startDir)
+    {
+        var dir = startDir;
+        while (true)
+        {
+            if (Directory.Exists(Path.Combine(dir, ".obsidian")))
+                return Path.GetFullPath(dir);
+
+            var parent = Directory.GetParent(dir);
+            if (parent is null) return null;
+            dir = parent.FullName;
+        }
+    }
 }

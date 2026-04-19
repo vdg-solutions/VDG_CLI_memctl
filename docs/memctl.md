@@ -32,6 +32,9 @@ memctl append --id <note-id> --content "Update: discovered edge case..."
 
 # Boost notes that will matter next session:
 memctl weight <id> 1.5
+
+# File useful answers back — they compound future context:
+memctl add --title "Analysis: <topic>" --content "<synthesized answer>"
 ```
 
 ### Session end (Consolidate)
@@ -352,6 +355,106 @@ The `initialize` response automatically includes a session protocol in `serverIn
 
 ---
 
+## Other LLM Clients
+
+memctl's MCP mode and CLI are client-agnostic. G1/G2 automation examples use Claude Code hooks, but the underlying commands work with any client.
+
+### AGENTS.md / OpenCode / Codex / Pi
+Copy `docs/memctl.md` to `AGENTS.md` in your project root. The session protocol (Recall → Encode → Consolidate) applies to any LLM agent with MCP support.
+
+### Shell wrapper (any CLI-based LLM)
+For clients with no hook system, a thin shell wrapper provides G1+G2 automation:
+```bash
+#!/usr/bin/env bash
+# Usage: memctl-wrap <llm-cli-command> [args...]
+PROMPT=$(cat /dev/stdin)
+CONTEXT=$(echo "$PROMPT" | memctl context-inject 2>/dev/null)
+FULL_PROMPT="${CONTEXT}
+
+${PROMPT}"
+RESPONSE=$(echo "$FULL_PROMPT" | "$@")
+echo "$RESPONSE"
+memctl capture --role user --text "$PROMPT" 2>/dev/null
+memctl capture --role assistant --text "$RESPONSE" 2>/dev/null
+```
+
+### MCP initialize (all MCP clients, zero config)
+The MCP `initialize` response already injects session protocol into every MCP-compatible client via `serverInfo.instructions`. No additional config needed — recall instructions are delivered automatically on every session start.
+
+---
+
+## Hook Protocol v1
+
+Claude Code implements G1+G2 via two hooks. Any LLM client can replicate this by implementing the same two events. This section defines the client-agnostic contract — no SDK required, just stdin/stdout.
+
+| Event | When | Direction | memctl command |
+|-------|------|-----------|----------------|
+| `after-response` | AI finishes a response | client → memctl (stdin JSON) | `memctl capture` |
+| `before-prompt` | User submits prompt, before AI sees it | client → memctl (stdin text) → client (stdout prepended) | `memctl context-inject` |
+
+### Event 1: `after-response` (G1 — auto-capture)
+
+After the AI response is complete, spawn the configured command and pipe a JSON payload on stdin:
+
+```json
+{
+  "session_id": "string — unique per session, stable across turns",
+  "cwd": "string — absolute working directory",
+  "transcript": [
+    { "role": "user",      "content": "string" },
+    { "role": "assistant", "content": "string" }
+  ]
+}
+```
+
+- `session_id`: stable per session → turns accumulate in one note (`sessions/<date>-<session_id>.md`)
+- `cwd`: used for vault auto-detection (no `--vault` flag needed)
+- `transcript`: last N turns is sufficient; full history not required
+- Extra fields: ignored (forward-compatible)
+- Client: MUST ignore non-zero exit; MUST enforce timeout (recommended 10 s)
+
+### Event 2: `before-prompt` (G2 — context injection)
+
+Before sending the prompt to the AI, spawn the configured command and pipe the user's raw prompt text on stdin. If stdout is non-empty, prepend it to the prompt (or inject as a context message) before the AI call.
+
+- stdin: plain UTF-8 text — the user's prompt, no envelope
+- stdout: markdown context block, or empty string
+- Timeout: 5 s recommended — treat timeout as empty output, proceed
+- Client: MUST NOT block the prompt on non-zero exit or timeout
+
+### Config format (canonical)
+
+```json
+{
+  "hooks": {
+    "after-response": [{ "command": "memctl capture" }],
+    "before-prompt":  [{ "command": "memctl context-inject" }]
+  }
+}
+```
+
+### Claude Code — reference implementation
+
+Claude Code maps: `Stop` → `after-response`, `UserPromptSubmit` → `before-prompt`. Config in `~/.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "Stop":              [{ "hooks": [{ "type": "command", "command": "memctl capture" }] }],
+    "UserPromptSubmit":  [{ "hooks": [{ "type": "command", "command": "memctl context-inject" }] }]
+  }
+}
+```
+
+### Client compliance checklist
+
+- [ ] `after-response`: spawn command, pipe JSON, ignore exit code, enforce 10 s timeout
+- [ ] `before-prompt`: spawn command, pipe prompt text, prepend non-empty stdout, enforce 5 s timeout
+- [ ] Both: never crash or block the session on any hook failure
+- [ ] Config: read from the canonical JSON format above
+
+---
+
 ## JSON Output
 
 Every command returns:
@@ -501,11 +604,12 @@ Bộ nhớ con người không cần effort: ký ức hình thành tự động,
 
 **Vấn đề:** Bot phải chủ động gọi `create`/`append` để lưu memory. Nó thường quên.
 
-**Giải pháp:** Thêm `--auto` flag vào `add-turn`. Kết hợp với Claude Code `Stop` hook — hook chạy sau mỗi response, tự động capture conversation turn vào vault mà không cần bot nhớ gì.
+**Giải pháp:** New command `memctl capture`. Đọc Claude Code `Stop` hook payload từ stdin (JSON), filter signal (bỏ turns < 50 chars, bỏ pure tool-call turns), lưu vào `sessions/<date>-<session_id>.md`. Non-Claude Code clients dùng direct mode: `memctl capture --role user --text "..."`.
 
 ```json
-// ~/.claude/settings.json
-{ "hooks": { "Stop": [{ "hooks": [{ "type": "command", "command": "memctl add-turn --auto" }] }] } }
+// ~/.claude/settings.json (Claude Code)
+{ "hooks": { "Stop": [{ "hooks": [{ "type": "command", "command": "memctl capture" }] }] } }
+// Other clients: shell wrapper → memctl capture --role <user|assistant> --text "<content>"
 ```
 
 ### G2 — Proactive injection: ký ức tự được recall khi liên quan (P0)
