@@ -58,8 +58,13 @@ public sealed class SqliteNoteIndex : INoteIndex
     public Note? GetByFilePath(string filePath) =>
         QueryOne("SELECT * FROM notes WHERE file_path = @fp", ("@fp", filePath));
 
-    public IReadOnlyList<Note> GetAll() =>
-        QueryMany("SELECT * FROM notes ORDER BY weight DESC, access_count DESC");
+    public IReadOnlyList<Note> GetAll(bool includeArchived = false)
+    {
+        var sql = includeArchived
+            ? "SELECT * FROM notes ORDER BY weight DESC, access_count DESC"
+            : "SELECT * FROM notes WHERE archived = 0 ORDER BY weight DESC, access_count DESC";
+        return QueryMany(sql);
+    }
 
     public IReadOnlyList<SearchHit> SearchBm25(string query, int limit, string? folderPrefix = null)
     {
@@ -237,7 +242,30 @@ public sealed class SqliteNoteIndex : INoteIndex
     public void SetWeight(string noteId, float weight)
     {
         var clamped = Math.Clamp(weight, 0.0f, 2.0f);
-        Exec("UPDATE notes SET weight = @w WHERE id = @id", ("@w", clamped), ("@id", noteId));
+        var now     = DateTime.UtcNow.ToString("O");
+        Exec("UPDATE notes SET weight = @w, last_weight_set = @lws WHERE id = @id",
+            ("@w", clamped), ("@lws", now), ("@id", noteId));
+    }
+
+    public void ApplyDecay(string noteId, float newWeight, bool archived)
+    {
+        var arch = archived ? 1 : 0;
+        Exec("UPDATE notes SET weight = @w, archived = @arch WHERE id = @id",
+            ("@w", newWeight), ("@arch", arch), ("@id", noteId));
+    }
+
+    public void ApplyDecayBatch(IEnumerable<(string NoteId, float NewWeight, bool Archived)> updates)
+    {
+        using var tx = _db!.BeginTransaction();
+        foreach (var (noteId, newWeight, archived) in updates)
+        {
+            var arch = archived ? 1 : 0;
+            using var cmd = Cmd("UPDATE notes SET weight = @w, archived = @arch WHERE id = @id",
+                ("@w", newWeight), ("@arch", arch), ("@id", noteId));
+            cmd.Transaction = tx;
+            cmd.ExecuteNonQuery();
+        }
+        tx.Commit();
     }
 
     public void IncrementAccess(string noteId) =>
@@ -292,8 +320,10 @@ public sealed class SqliteNoteIndex : INoteIndex
         END");
 
         // idempotent column migrations for existing databases
-        MigrateAddColumn("weight",       "REAL    NOT NULL DEFAULT 0.0");
-        MigrateAddColumn("access_count", "INTEGER NOT NULL DEFAULT 0");
+        MigrateAddColumn("weight",          "REAL    NOT NULL DEFAULT 0.0");
+        MigrateAddColumn("access_count",    "INTEGER NOT NULL DEFAULT 0");
+        MigrateAddColumn("archived",        "INTEGER NOT NULL DEFAULT 0");
+        MigrateAddColumn("last_weight_set", "TEXT");
     }
 
     private void MigrateAddColumn(string column, string definition)
@@ -364,19 +394,38 @@ public sealed class SqliteNoteIndex : INoteIndex
         var weightCol      = r.GetOrdinal("weight");
         var accessCountCol = r.GetOrdinal("access_count");
 
+        DateTime? lastWeightSet = null;
+        try
+        {
+            var lwsCol = r.GetOrdinal("last_weight_set");
+            if (!r.IsDBNull(lwsCol))
+                lastWeightSet = DateTime.Parse(r.GetString(lwsCol)).ToUniversalTime();
+        }
+        catch { /* column absent in legacy schema — ignored */ }
+
+        bool archived = false;
+        try
+        {
+            var archCol = r.GetOrdinal("archived");
+            if (!r.IsDBNull(archCol)) archived = r.GetInt32(archCol) != 0;
+        }
+        catch { /* column absent in legacy schema — ignored */ }
+
         return new Note
         {
-            Id          = r.GetString(r.GetOrdinal("id")),
-            FilePath    = r.GetString(r.GetOrdinal("file_path")),
-            Title       = r.GetString(r.GetOrdinal("title")),
-            Content     = r.GetString(r.GetOrdinal("content")),
-            Tags        = tags,
-            Links       = links,
-            Created     = DateTime.Parse(r.GetString(r.GetOrdinal("created_at"))).ToUniversalTime(),
-            Modified    = DateTime.Parse(r.GetString(r.GetOrdinal("modified_at"))).ToUniversalTime(),
-            Embedding   = embedding,
-            Weight      = r.IsDBNull(weightCol)      ? 0.0f : (float)r.GetDouble(weightCol),
-            AccessCount = r.IsDBNull(accessCountCol) ? 0    : r.GetInt32(accessCountCol),
+            Id            = r.GetString(r.GetOrdinal("id")),
+            FilePath      = r.GetString(r.GetOrdinal("file_path")),
+            Title         = r.GetString(r.GetOrdinal("title")),
+            Content       = r.GetString(r.GetOrdinal("content")),
+            Tags          = tags,
+            Links         = links,
+            Created       = DateTime.Parse(r.GetString(r.GetOrdinal("created_at"))).ToUniversalTime(),
+            Modified      = DateTime.Parse(r.GetString(r.GetOrdinal("modified_at"))).ToUniversalTime(),
+            Embedding     = embedding,
+            Weight        = r.IsDBNull(weightCol)      ? 0.0f : (float)r.GetDouble(weightCol),
+            AccessCount   = r.IsDBNull(accessCountCol) ? 0    : r.GetInt32(accessCountCol),
+            Archived      = archived,
+            LastWeightSet = lastWeightSet,
         };
     }
 

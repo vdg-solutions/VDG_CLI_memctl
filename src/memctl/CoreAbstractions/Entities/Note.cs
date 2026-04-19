@@ -11,6 +11,8 @@ public sealed record Note
     public DateTime Created    { get; init; }
     public DateTime Modified   { get; init; }
     public float[]? Embedding    { get; init; }
-    public float    Weight       { get; init; } = 0.0f;
-    public int      AccessCount  { get; init; } = 0;
+    public float     Weight        { get; init; } = 0.0f;
+    public int       AccessCount   { get; init; } = 0;
+    public bool      Archived      { get; init; } = false;
+    public DateTime? LastWeightSet { get; init; }
 }
