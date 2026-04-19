@@ -34,6 +34,8 @@ dotnet tool install -g memctl --add-source ./nupkg
 
 **Always run `status` before the first use of a vault.** This tells you if the embedding model is downloaded and the vault is indexed — without triggering a blocking download.
 
+`--vault` is optional if you run from inside a project with a `.obsidian/` directory — memctl auto-detects upward. Examples below use explicit `--vault` for clarity.
+
 ```bash
 memctl status --vault ./vault
 → {
@@ -124,6 +126,17 @@ memctl list --vault ./vault --limit 20
 memctl list --vault ./vault --tag crypto
 ```
 
+### Search — Quick pick
+
+| Command | When to use |
+|---------|-------------|
+| `search` | Default — unknown intent, general queries |
+| `search-semantic` | Conceptual / meaning-based ("what notes relate to X idea") |
+| `search-text` | Exact keyword, name, code, ID |
+| `search-tags` | Topic cluster, known tag |
+| `search-links` | Graph traversal — "what's connected to note X" |
+| `search-date` | Time-scoped queries |
+
 ### `search <query>`
 **Hybrid search** — RRF fusion of BM25 + semantic. Best default for general queries.
 ```bash
@@ -183,10 +196,11 @@ memctl stats --vault ./vault
 ```
 
 ### `weight <id> <value>`
-Set importance weight (0.0–1.0). Affects `list` sort order — higher weight = appears first.
+Set importance weight. Affects `list` sort order — higher weight = appears first. Default is `1.0`. Use `0.0` to deprioritize, `> 1.0` to protect from future temporal decay.
 ```bash
-memctl weight abc123 0.9 --vault ./vault   # mark as high importance
-memctl weight abc123 0.0 --vault ./vault   # deprioritize
+memctl weight abc123 1.5 --vault ./vault   # high importance, decay-resistant
+memctl weight abc123 0.9 --vault ./vault   # normal importance
+memctl weight abc123 0.0 --vault ./vault   # deprioritize / archive
 ```
 
 ### `identity set <id|path>`
@@ -202,10 +216,12 @@ Retrieve the current identity note.
 memctl identity get --vault ./vault
 ```
 
-### `add-turn <content>`
-Append a conversation turn to an existing note. Designed for logging AI session exchanges.
+### `add-turn`
+Log a Telegram conversation turn. Creates `chats/<chat-id>/<date>.md` per day, appends each turn. Required flags: `--chat-id`, `--from`, `--role`, `--text`.
 ```bash
-memctl add-turn "User: how does X work?\nAssistant: X works by..." --vault ./vault --id abc123
+memctl add-turn --chat-id 123456 --from "Alice" --role user --text "how does X work?" --vault ./vault
+memctl add-turn --chat-id 123456 --from "Bot" --role assistant --text "X works by..." --vault ./vault
+# optional: --user-id, --timestamp (ISO 8601), --write-only (skip index update)
 ```
 
 ### `organize`
@@ -255,7 +271,7 @@ memctl mcp --vault ./vault  # explicit override
 | `create` | Create new note, index immediately |
 | `update` | Replace note content, re-index |
 | `append` | Append to note, re-index |
-| `delete` | Delete note from disk and index |
+| `delete` | Delete note from disk and index (MCP only — no CLI equivalent) |
 | `set_weight` | Set note importance weight |
 
 The `initialize` response automatically includes a session protocol in `serverInfo.instructions` — telling the agent to call `list` and `search` at session start for context.
@@ -398,3 +414,59 @@ memctl search-semantic "<query>" --vault ./vault --scope <tag-result-ids>
 | `1` | Not found / validation error |
 | `2` | Note not found |
 | `9` | Internal error |
+
+---
+
+## Roadmap — "Bot có ký ức về mọi thứ"
+
+memctl hiện tại đủ cho **query** (search, list, get) và **write** (create, update, append). Để đạt universal bot memory — nơi bot tích lũy ký ức **về mọi thứ cần nhớ** qua mọi session — còn 5 gap cần giải:
+
+> "Cần nhớ" = decisions, findings, patterns, user preferences, bugs, rationale. Không phải mọi exchange đều cần lưu — auto-capture nên filter signal khỏi noise. G5 (decay) là cơ chế tự nhiên giữ vault focused vào những gì còn relevant.
+
+### G1 — Auto-capture (P0)
+
+**Vấn đề:** Bot phải chủ động gọi `create`/`append` để lưu memory. Nó thường quên.
+
+**Giải pháp:** Thêm `--auto` flag vào `add-turn`. Kết hợp với Claude Code `Stop` hook — hook chạy sau mỗi response, tự động capture conversation turn vào vault mà không cần bot nhớ gì.
+
+```json
+// ~/.claude/settings.json
+{ "hooks": { "Stop": [{ "hooks": [{ "type": "command", "command": "memctl add-turn --auto" }] }] } }
+```
+
+### G2 — Proactive injection (P0)
+
+**Vấn đề:** Bot phải chủ động gọi `list`/`search` để load context — nó có thể skip.
+
+**Giải pháp:** New command `memctl context-inject`. Đọc user prompt từ stdin, extract keywords, chạy `list + search`, format thành context block → stdout. Kết hợp với `UserPromptSubmit` hook — context được inject tự động vào mỗi conversation turn trước khi bot process.
+
+```json
+{ "hooks": { "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "memctl context-inject" }] }] } }
+```
+
+### G3 — Structural lint (P1)
+
+**Vấn đề:** Notes tích lũy theo thời gian không được health-check — orphans, duplicates, dead links.
+
+**Giải pháp:** `memctl lint` — output structured report (orphan notes, duplicate titles, notes không có inbound link, broken wikilinks). Bot đọc report và fix. memctl không cần LLM — chỉ cần structural analysis.
+
+```bash
+memctl lint --vault ./vault
+→ {"orphans": [...], "duplicates": [...], "broken_links": [...], "no_inbound": [...]}
+```
+
+### G4 — Source fetch (P2)
+
+**Vấn đề:** Không có cách fetch raw source (URL/file) để bot synthesize vào vault.
+
+**Giải pháp:** `memctl fetch <url>` — fetch URL, convert HTML → markdown, output to stdout. Bot đọc, synthesize, gọi `create`/`append`. memctl là fetch helper; bot là brain.
+
+```bash
+memctl fetch "https://example.com/article" | # → bot reads, creates notes
+```
+
+### G5 — Temporal decay (P1)
+
+**Vấn đề:** Old notes không decay → cạnh tranh với fresh notes trong search results. Vault trở nên noisy theo thời gian.
+
+**Giải pháp:** `memctl decay --days 30` — giảm weight của notes không được access/update trong N ngày. Weight field đã có sẵn; chỉ cần decay logic. Notes quan trọng được boost tay (hoặc qua auto-capture) → immune to decay. Notes bị quên → tự nhiên chìm xuống. Đây là cơ chế giữ vault focused vào "cần nhớ" thay vì "mọi thứ".
