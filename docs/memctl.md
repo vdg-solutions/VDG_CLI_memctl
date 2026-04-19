@@ -39,14 +39,21 @@ memctl weight <id> 1.5
 memctl add --title "Session: <date> — <task>" --content "<summary of what was done, decided, left open>"
 ```
 
-### Periodic maintenance (Lint) — run weekly or when vault feels noisy
+### Periodic maintenance (Lint) — fully automatic after G3 ships
 ```bash
-# Coming G3 — not yet implemented:
-memctl lint                 # → report: orphans, duplicates, broken links, isolated notes
-# Bot reads report → merges duplicates, fixes broken links, boosts or deletes orphans
+# Structural lint: baked into ingest — runs every session, free
+memctl ingest
+# → {"indexed": 47, "lint": {"orphans": 2, "broken_links": 1, "duplicates": 0}}
+
+# Semantic lint: auto-triggered by ingest when overdue (default: every 7 days)
+# Uses cheap LLM (Haiku ~$0.05/run for 100 notes) — no manual action needed
+# Report saved as vault note → bot reads it next session start
+
+# Manual semantic lint:
+memctl lint --semantic --llm-url <url> --llm-model claude-haiku-4-5-20251001 --llm-key $KEY
 
 # Coming G5:
-memctl decay --days 30      # → reduce weight of notes not touched in N days
+memctl decay --days 30      # reduce weight of notes not touched in N days
 ```
 
 Until G3 ships, manually ask the bot: *"Review my vault and clean up duplicates/orphans."*
@@ -501,15 +508,15 @@ Bộ nhớ con người không cần effort: ký ức hình thành tự động,
 { "hooks": { "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "memctl context-inject" }] }] } }
 ```
 
-### G3 — Structural lint: vệ sinh ký ức (P1)
+### G3 — Lint hai tầng: vệ sinh ký ức tự động (P1)
 
-**Vấn đề:** Notes tích lũy theo thời gian không được health-check — orphans, duplicates, dead links.
+**Tier 1 — Structural (free, baked vào ingest):** Mỗi lần `ingest` tự động health check — orphans, duplicates, broken links, isolated notes. Kết quả append vào ingest JSON output. Không cần LLM.
 
-**Giải pháp:** `memctl lint` — output structured report (orphan notes, duplicate titles, notes không có inbound link, broken wikilinks). Bot đọc report và fix. memctl không cần LLM — chỉ cần structural analysis.
+**Tier 2 — Semantic (cheap LLM, auto-scheduled):** Track `last_semantic_lint` trong index metadata. Khi `now - last_semantic_lint > 7 ngày` (configurable), ingest tự trigger semantic lint qua LLM rẻ (Haiku ~$0.05/100 notes). LLM tìm contradictions, stale claims, synthesis candidates. Report lưu thành vault note → bot đọc lần sau.
 
 ```bash
-memctl lint --vault ./vault
-→ {"orphans": [...], "duplicates": [...], "broken_links": [...], "no_inbound": [...]}
+memctl ingest   # structural free + semantic auto khi overdue
+memctl lint --semantic --llm-url ... --llm-model claude-haiku-4-5-20251001 --llm-key $KEY
 ```
 
 ### G4 — Source fetch: học từ nguồn bên ngoài (P2)
