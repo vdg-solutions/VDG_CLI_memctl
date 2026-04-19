@@ -1,4 +1,39 @@
 
+### [2026-04-19] — nuget_tls_smoke_environment
+- Severity: low
+- Triggers: [fetch, http, network, nuget, tls, smoke]
+- Pattern: Network-dependent smoke tests (external URLs, TLS) may be UNVERIFIABLE in sandboxed build environments. Mark as UNVERIFIABLE, not FAIL. Verify by static code review instead.
+- Fix: Always include static code review path verification as fallback for network-dependent tests.
+- Hit count: 1
+
+### [2026-04-19] — json_null_field_vs_absent
+- Severity: high
+- Triggers: [csharp, json, serialization, nullable, anonymous, hint, optional]
+- Pattern: When a JSON response field should be conditionally absent (not null), Generator uses a single anonymous object with a nullable value (serializes as "field": null). Spec says absent. Root cause: not reading the acceptance criteria carefully ("field absent" != "field null").
+- Fix: Use two separate anonymous object expressions — one with the field, one without. Or use a DTO with [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)].
+- Hit count: 1
+
+### [2026-04-19] — spec_exact_text_not_copied
+- Severity: normal
+- Triggers: [message, text, hint, output, format, exact]
+- Pattern: When spec provides exact acceptance criterion text for user-facing strings, Generator paraphrases instead of copying verbatim. Results in review rejection.
+- Fix: When spec says 'emit: "X"', output exactly "X", not a paraphrase.
+- Hit count: 1
+
+### [2026-04-19] — sqlite_pragma_table_info_migration
+- Severity: normal
+- Triggers: [sqlite, migration, csharp, dotnet, alter, column]
+- Pattern: When adding columns to an existing SQLite table via ALTER TABLE, prefer checking pragma_table_info(tableName) to see if column exists before ALTER, rather than catching duplicate column exceptions. SQLite exception messages are not standardized and may vary.
+- Fix: Use `SELECT COUNT(*) FROM pragma_table_info('notes') WHERE name='col_name'` before ALTER TABLE.
+- Hit count: 1
+
+### [2026-04-19] — local_function_before_type_declaration
+- Severity: high
+- Triggers: [csharp, dotnet, program, topLevel, localFunction, static]
+- Pattern: In C# top-level statement files (Program.cs), local functions (static or not) must be placed BEFORE any `internal sealed record` or other type declarations. Placing local functions AFTER type declarations causes CS8803 compilation error.
+- Fix: Move local functions to after `return await root.InvokeAsync(args)` and before the first type/record declaration.
+- Hit count: 1
+
 ### [2026-04-19] — sqlite_upsert_weight_not_inserted (task 11)
 - Severity: high
 - Triggers: [upsert, weight, sqlite, noteindex, insert, capture, session]

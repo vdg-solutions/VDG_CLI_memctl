@@ -2,7 +2,7 @@
 id: 10
 type: task
 title: 'G5: Temporal decay — memctl decay --days N'
-status: Todo
+status: Done
 priority: medium
 created: 2026-04-19
 updated: 2026-04-19
@@ -53,3 +53,11 @@ New command `memctl decay --days 30`:
 - `memctl decay --dry-run` → report mà không thay đổi weights
 - Idempotent: chạy 2 lần cùng ngày → kết quả giống nhau
 - `--decay-factor <float>` optional flag, default 0.9
+
+## Comments
+
+**2026-04-19 15:21 user:** Phase 1 complete: Spec created at docs/specs/10-spec.md
+
+**2026-04-19 15:27 user:** Phase 2 complete: Design created at docs/designs/10-design.md
+
+**2026-04-19 15:45 user:** Pipeline complete. Merged to main. QC: 4.8/5, Review: 4.79/5. 0 QC loops.

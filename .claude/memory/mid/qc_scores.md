@@ -8,3 +8,11 @@
 | 2026-04-17 | Review 8 | — | — | 4.9/5 | — | APPROVE |
 | 2026-04-19 | #11 G1 auto-capture | PASS | PASS | 4.9/5 | 4.9/5 | 1 |
 | 2026-04-19 | Review 11 | — | — | 4.6/5 | — | APPROVE |
+| 2026-04-19 | #12 G2 context-inject | PASS | PASS | 5.0/5 | 5.0/5 | 0 |
+| 2026-04-19 | Review 12 | — | — | 4.64/5 | — | APPROVE |
+| 2026-04-19 | #10 G5 decay | PASS | PASS | 4.8/5 | 4.8/5 | 1 |
+| 2026-04-19 | Review #10 | — | — | 4.79/5 | — | APPROVE |
+| 2026-04-19 | #13 G3 lint | PASS | PASS | 4.8/5 | 4.8/5 | 0 |
+| 2026-04-19 | Review 13 | — | — | 4.8/5 | — | APPROVE |
+| 2026-04-19 | #9 G4 fetch | PASS | PASS | 5.0/5 | 4.9/5 | 0 |
+| 2026-04-19 | Review 9 | — | — | 4.9/5 | — | APPROVE |

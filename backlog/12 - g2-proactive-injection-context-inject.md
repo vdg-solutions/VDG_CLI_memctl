@@ -2,7 +2,7 @@
 id: 12
 type: task
 title: 'G2: Proactive injection — memctl context-inject + UserPromptSubmit hook'
-status: Todo
+status: Done
 priority: high
 created: 2026-04-19
 updated: 2026-04-19
@@ -61,3 +61,11 @@ Hook config (user docs):
 - Format mỗi note: `### {title}\n{content}\n` (truncate content > 500 chars)
 - `memctl context-inject --dry-run` → print context block to stdout, no actual injection (same behavior, for testing)
 - Docs: ví dụ UserPromptSubmit hook config trong docs/memctl.md
+
+## Comments
+
+**2026-04-19 14:32 user:** Phase 1 complete: Spec created at docs/specs/12-spec.md
+
+**2026-04-19 14:47 user:** Phase 2 complete: Design created at docs/designs/12-design.md
+
+**2026-04-19 15:15 user:** Pipeline complete. Merged to main. QC: 5.0/5, Review: 4.64/5. 0 QC loops.

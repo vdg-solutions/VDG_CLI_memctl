@@ -2,7 +2,7 @@
 id: 13
 type: task
 title: 'G3: Lint two-tier — structural (ingest) + semantic (auto-scheduled LLM or --self)'
-status: Todo
+status: Done
 priority: medium
 created: 2026-04-19
 updated: 2026-04-19
@@ -82,3 +82,9 @@ Semantic lint auto-scheduled: sau mỗi `ingest`, report bao nhiêu ngày kể t
 - Exit 0 khi vault không tồn tại — empty report
 - LLM call timeout 30s, exit 1 nếu fail (structural results vẫn output trước đó)
 - `memctl lint --save` → persist structural lint report as vault note `lint/<date>-structural.md` (enables lint history compounding across sessions)
+
+## Comments
+
+**2026-04-19 15:54 user:** Phase 1-2 complete: Spec (48 FRs) and design created
+
+**2026-04-19 16:18 user:** Pipeline complete. Merged to main. QC: 4.8/5, Review: 4.8/5 (1 retry loop).

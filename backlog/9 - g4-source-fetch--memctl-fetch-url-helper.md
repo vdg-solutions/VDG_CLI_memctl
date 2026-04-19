@@ -2,7 +2,7 @@
 id: 9
 type: task
 title: 'G4: Source fetch — memctl fetch <url> helper'
-status: Todo
+status: Done
 priority: low
 created: 2026-04-19
 updated: 2026-04-19
@@ -45,3 +45,9 @@ New command `memctl fetch <url>`:
 - HTTP 4xx/5xx: exit 1 với error JSON kèm status code
 - Không cần vault — command hoàn toàn độc lập
 - `--raw` flag: output raw HTML thay vì converted markdown
+
+## Comments
+
+**2026-04-19 16:25 user:** Phase 1-3 complete: Spec (12 FRs), design, implementation built successfully
+
+**2026-04-19 16:30 user:** Pipeline complete. Merged to main. QC: 4.9/5, Review: 4.9/5. 0 QC loops.

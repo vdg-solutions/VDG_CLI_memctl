@@ -2,7 +2,7 @@
 id: 11
 type: task
 title: 'G1: Auto-capture — memctl capture + Claude Code Stop hook'
-status: In Progress
+status: Done
 priority: high
 created: 2026-04-19
 updated: 2026-04-19
