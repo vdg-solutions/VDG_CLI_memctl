@@ -5,8 +5,7 @@ title: Add Layer 0 identity note for MCP context bootstrapping
 status: Done
 priority: high
 created: 2026-04-17
-updated: 2026-04-17
-depends_on: [3, 4]
+updated: 2026-04-19
 ---
 
 ## Description
@@ -39,3 +38,20 @@ memctl already has L1, L2, L3. Only L0 is missing.
 2. Convention for designation: special tag vs special filename vs SQLite metadata entry?
 3. Should identity note be excluded from `list`/`GetAll()` sort (always first) or treated as weight=1.0 note (naturally first)?
 4. What happens when no identity note is set — silent skip or error?
+
+## Comments
+
+**2026-04-19 10:19 user:** ## Description
+Bot phải chủ động gọi create/append để lưu memory — nó thường quên. Auto-capture loại bỏ dependency này hoàn toàn.
+
+## Implementation
+1. Thêm `--auto` flag vào `AddTurnOperator`: đọc conversation context từ Claude Code hook env vars (CLAUDE_HOOK_SESSION_ID, CLAUDE_HOOK_TRANSCRIPT_PATH hoặc stdin JSON)
+2. Filter signal khỏi noise: chỉ capture khi transcript có decision/finding/pattern keywords — không capture mọi exchange
+3. Document Claude Code Stop hook config trong docs/
+
+## Acceptance Criteria
+- `memctl add-turn --auto` đọc hook payload từ stdin (JSON format mà Claude Code inject vào Stop hook)
+- Tự động tạo note hoặc append vào session note hiện tại
+- Filter: không lưu exchanges rỗng, chỉ lưu khi content có nghĩa (>50 chars hoặc chứa decision markers)
+- `memctl add-turn --auto` exit 0 ngay cả khi vault chưa tồn tại (silent fail, không block hook)
+- Docs cập nhật: ví dụ Stop hook config cho ~/.claude/settings.json

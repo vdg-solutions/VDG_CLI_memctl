@@ -235,7 +235,7 @@ public sealed class SqliteNoteIndex : INoteIndex
 
     public void SetWeight(string noteId, float weight)
     {
-        var clamped = Math.Clamp(weight, 0.0f, 1.0f);
+        var clamped = Math.Clamp(weight, 0.0f, 2.0f);
         Exec("UPDATE notes SET weight = @w WHERE id = @id", ("@w", clamped), ("@id", noteId));
     }
 
