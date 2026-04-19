@@ -534,6 +534,43 @@ contextInjectCmd.SetHandler(async ctx =>
 });
 root.AddCommand(contextInjectCmd);
 
+// --- lint ---
+var lintSemanticOpt         = new Option<bool>   ("--semantic",         "Enable Tier 2 semantic lint via LLM");
+var lintSelfOpt             = new Option<bool>   ("--self",             "Print self-analysis prompt to stdout (no LLM call)");
+var lintFormatOpt           = new Option<string> ("--format",           () => "json", "Output format: json | md");
+var lintSaveOpt             = new Option<bool>   ("--save",             "Persist structural report as vault note");
+var lintDryRunOpt           = new Option<bool>   ("--dry-run",          "Simulate — no writes");
+var lintUpdateTsOpt         = new Option<bool>   ("--update-timestamp", "Record semantic lint timestamp only; skip lint run");
+var lintCmd = new Command("lint", "Two-tier vault health check (structural + optional semantic)");
+lintCmd.AddOption(lintSemanticOpt);
+lintCmd.AddOption(lintSelfOpt);
+lintCmd.AddOption(lintFormatOpt);
+lintCmd.AddOption(lintSaveOpt);
+lintCmd.AddOption(lintDryRunOpt);
+lintCmd.AddOption(lintUpdateTsOpt);
+lintCmd.SetHandler(async ctx =>
+{
+    var g = G(ctx);
+    if (RequireVault(g, ctx) is not { } vault) return;
+    var pr   = ctx.ParseResult;
+    var opts = new LintOptions(
+        Semantic:            pr.GetValueForOption(lintSemanticOpt),
+        Self:                pr.GetValueForOption(lintSelfOpt),
+        DryRun:              pr.GetValueForOption(lintDryRunOpt),
+        Save:                pr.GetValueForOption(lintSaveOpt),
+        UpdateTimestampOnly: pr.GetValueForOption(lintUpdateTsOpt),
+        Format:              pr.GetValueForOption(lintFormatOpt) ?? "json",
+        LlmUrl:              g.LlmUrl,
+        LlmModel:            g.LlmModel,
+        LlmKey:              g.LlmKey);
+    var op = new LintOperator(vaultReader, noteIndex);
+    var (outcome, exitCode) = await op.ExecuteAsync(vault, opts);
+    if (opts.Format != "md" || !outcome.Success)
+        ResultPrinter.Print(outcome);
+    ctx.ExitCode = exitCode;
+});
+root.AddCommand(lintCmd);
+
 // --- capture ---
 var capRoleOpt    = new Option<string?>("--role",       "Turn role (user | assistant) — direct mode");
 var capTextOpt    = new Option<string?>("--text",       "Turn content — direct mode");
