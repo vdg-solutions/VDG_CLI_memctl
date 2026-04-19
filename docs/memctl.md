@@ -46,11 +46,16 @@ memctl ingest
 # → {"indexed": 47, "lint": {"orphans": 2, "broken_links": 1, "duplicates": 0}}
 
 # Semantic lint: auto-triggered by ingest when overdue (default: every 7 days)
-# Uses cheap LLM (Haiku ~$0.05/run for 100 notes) — no manual action needed
+# Uses cheap LLM (~$0.05/run for 100 notes) — no manual action needed
 # Report saved as vault note → bot reads it next session start
+# ingest output includes hint when overdue:
+# → {"semantic_lint": {"days_since": 9, "overdue": true, "hint": "Run: memctl lint --semantic ..."}}
 
-# Manual semantic lint:
-memctl lint --semantic --llm-url <url> --llm-model claude-haiku-4-5-20251001 --llm-key $KEY
+# Manual semantic lint via proxy:
+memctl lint --semantic \
+  --llm-url http://127.0.0.1:1234/v1 \
+  --llm-model gemma4:31b-cloud \
+  --llm-key $PROXY_KEY
 
 # Coming G5:
 memctl decay --days 30      # reduce weight of notes not touched in N days
@@ -512,11 +517,16 @@ Bộ nhớ con người không cần effort: ký ức hình thành tự động,
 
 **Tier 1 — Structural (free, baked vào ingest):** Mỗi lần `ingest` tự động health check — orphans, duplicates, broken links, isolated notes. Kết quả append vào ingest JSON output. Không cần LLM.
 
-**Tier 2 — Semantic (cheap LLM, auto-scheduled):** Track `last_semantic_lint` trong index metadata. Khi `now - last_semantic_lint > 7 ngày` (configurable), ingest tự trigger semantic lint qua LLM rẻ (Haiku ~$0.05/100 notes). LLM tìm contradictions, stale claims, synthesis candidates. Report lưu thành vault note → bot đọc lần sau.
+**Tier 2 — Semantic (cheap LLM, auto-scheduled):** Track `last_semantic_lint` trong index metadata. Khi `now - last_semantic_lint > 7 ngày` (configurable), ingest tự trigger semantic lint qua LLM rẻ (~$0.05/100 notes). LLM tìm contradictions, stale claims, synthesis candidates. Report lưu thành vault note → bot đọc lần sau. Ingest output báo rõ khi overdue để bot biết gọi thủ công nếu cần.
 
 ```bash
 memctl ingest   # structural free + semantic auto khi overdue
-memctl lint --semantic --llm-url ... --llm-model claude-haiku-4-5-20251001 --llm-key $KEY
+
+# Manual — via VDG proxy:
+memctl lint --semantic \
+  --llm-url http://127.0.0.1:1234/v1 \
+  --llm-model gemma4:31b-cloud \
+  --llm-key $PROXY_KEY
 ```
 
 ### G4 — Source fetch: học từ nguồn bên ngoài (P2)
