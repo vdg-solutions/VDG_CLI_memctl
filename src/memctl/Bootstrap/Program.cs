@@ -571,6 +571,27 @@ lintCmd.SetHandler(async ctx =>
 });
 root.AddCommand(lintCmd);
 
+// --- fetch ---
+var fetchSourceArg = new Argument<string>("source", "URL (http/https) or local file path");
+var fetchRawOpt    = new Option<bool>("--raw", "Output raw HTML without markdown conversion");
+var fetchCmd       = new Command("fetch", "Fetch a URL or file and output as markdown");
+fetchCmd.AddArgument(fetchSourceArg);
+fetchCmd.AddOption(fetchRawOpt);
+fetchCmd.SetHandler(async ctx =>
+{
+    var source  = ctx.ParseResult.GetValueForArgument(fetchSourceArg);
+    var raw     = ctx.ParseResult.GetValueForOption(fetchRawOpt);
+    var outcome = await new FetchOperator().ExecuteAsync(source, raw);
+    if (outcome.Success)
+        Console.Write(outcome.Data?.ToString() ?? string.Empty);
+    else
+    {
+        ResultPrinter.Print(outcome);
+        ctx.ExitCode = 1;
+    }
+});
+root.AddCommand(fetchCmd);
+
 // --- capture ---
 var capRoleOpt    = new Option<string?>("--role",       "Turn role (user | assistant) — direct mode");
 var capTextOpt    = new Option<string?>("--text",       "Turn content — direct mode");
