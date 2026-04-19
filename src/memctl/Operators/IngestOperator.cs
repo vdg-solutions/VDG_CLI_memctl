@@ -6,6 +6,8 @@ namespace Memctl.Operators;
 
 public sealed class IngestOperator(IVaultReader vault, INoteIndex index, GemmaEmbeddingEngine? embedding)
 {
+    private const int SemanticOverdueDays = 14;
+
     public MemctlOutcome Execute(string vaultPath)
     {
         if (!Directory.Exists(vaultPath))
@@ -44,8 +46,27 @@ public sealed class IngestOperator(IVaultReader vault, INoteIndex index, GemmaEm
         }
 
         var model = embedding?.ModelName ?? "none";
+
+        // semantic lint hint
+        string? semanticHint = null;
+        var lastLint = index.GetMetadata("last_semantic_lint");
+        if (lastLint is null)
+        {
+            semanticHint = "Semantic lint has never run. Run: memctl lint --semantic";
+        }
+        else if (DateTime.TryParse(lastLint, null, System.Globalization.DateTimeStyles.RoundtripKind, out var lastLintDate))
+        {
+            var daysSince = (DateTime.UtcNow - lastLintDate).TotalDays;
+            if (daysSince > SemanticOverdueDays)
+                semanticHint = $"Semantic lint last ran {(int)daysSince} days ago. Run: memctl lint --semantic";
+        }
+        else
+        {
+            semanticHint = "Semantic lint has never run. Run: memctl lint --semantic";
+        }
+
         return MemctlOutcome.Ok("ingest", $"Indexed {added}/{files.Count} notes",
-            new { indexed = added, total = files.Count, vault = vaultPath, model });
+            new { indexed = added, total = files.Count, vault = vaultPath, model, semantic_lint_hint = semanticHint });
     }
 
     public static bool NeedsIngest(string vaultPath)
