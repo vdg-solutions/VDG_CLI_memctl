@@ -1,14 +1,14 @@
 ---
 id: 20
 type: task
-title: 'Identity note discoverability — Claude Code biết identity note tồn tại + cần set'
-status: Todo
+title: Identity note discoverability — Claude Code biết identity note tồn tại + cần set
+status: In Progress
 priority: low
 tags:
-  - identity
-  - mcp
-  - plugin-ux
-  - claude-code
+- identity
+- mcp
+- plugin-ux
+- claude-code
 created: 2026-04-30
 updated: 2026-04-30
 ---
