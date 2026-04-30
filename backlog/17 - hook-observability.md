@@ -2,7 +2,7 @@
 id: 17
 type: task
 title: Hook observability — log capture/context-inject failures cho Claude Code debug được
-status: In Progress
+status: Done
 priority: normal
 tags:
 - hooks
@@ -82,3 +82,7 @@ Phân biệt:
 ## Effort
 
 ~3-4h.
+
+## Comments
+
+**2026-04-30 09:17 user:** Phase 6: merged. Hook log + status command + MCP tool.
