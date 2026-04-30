@@ -1,41 +1,38 @@
 namespace Memctl.Implementations.Config;
 
+public sealed record VaultDiscovery(
+    string?                Vault,
+    string                 SearchPath,
+    string                 Strategy,
+    IReadOnlyList<string>  CheckedPaths);
+
 public static class VaultLocator
 {
-    /// <summary>
-    /// Returns the vault path to use.
-    /// If explicitPath is provided, returns it directly.
-    /// Otherwise walks up from cwd looking for a .obsidian/ marker.
-    /// Returns null if no vault found.
-    /// </summary>
     public static string? FindVault(string? explicitPath)
+        => Discover(explicitPath, Directory.GetCurrentDirectory()).Vault;
+
+    public static string? FindVaultFrom(string startDir)
+        => Discover(null, startDir).Vault;
+
+    /// Same walk-up algorithm but also returns the search path, strategy,
+    /// and the full list of paths checked. Used to surface debug context to
+    /// Claude Code when memory looks empty.
+    public static VaultDiscovery Discover(string? explicitPath, string searchPath)
     {
         if (explicitPath is not null)
-            return explicitPath;
+            return new VaultDiscovery(explicitPath, explicitPath, "explicit", [explicitPath]);
 
-        var dir = Directory.GetCurrentDirectory();
+        var checkedPaths = new List<string>();
+        var dir = searchPath;
         while (true)
         {
+            checkedPaths.Add(dir);
             if (Directory.Exists(Path.Combine(dir, ".obsidian")))
-                return Path.GetFullPath(dir);
+                return new VaultDiscovery(Path.GetFullPath(dir), searchPath, "walk-up from cwd", checkedPaths);
 
             var parent = Directory.GetParent(dir);
-            if (parent is null) return null;
-            dir = parent.FullName;
-        }
-    }
-
-    // Walk up from startDir — used by capture to detect vault from Hook Protocol v1 cwd field
-    public static string? FindVaultFrom(string startDir)
-    {
-        var dir = startDir;
-        while (true)
-        {
-            if (Directory.Exists(Path.Combine(dir, ".obsidian")))
-                return Path.GetFullPath(dir);
-
-            var parent = Directory.GetParent(dir);
-            if (parent is null) return null;
+            if (parent is null)
+                return new VaultDiscovery(null, searchPath, "walk-up from cwd", checkedPaths);
             dir = parent.FullName;
         }
     }
