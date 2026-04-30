@@ -1,16 +1,16 @@
 ---
 id: 25
 type: task
-title: 'GitHub Actions release pipeline — multi-platform AOT build + public release repo'
-status: Todo
+title: GitHub Actions release pipeline — multi-platform AOT build + public release repo
+status: Done
 priority: high
 tags:
-  - ci
-  - github-actions
-  - release
-  - automation
+- ci
+- github-actions
+- release
+- automation
 created: 2026-04-30
-updated: 2026-04-30
+updated: 2026-05-01
 ---
 
 ## Description
@@ -302,3 +302,7 @@ echo "Installed memctl ${LATEST} to ~/.local/bin"
 
 - Workflow này là tự động cho mọi tag `v*`. Manual trigger qua workflow_dispatch nếu cần re-run.
 - Pre-release (rc, alpha, beta) tags vẫn trigger — convention: `v1.2.1-rc1` works, GitHub Release auto-flag pre-release từ tag suffix.
+
+## Comments
+
+**2026-05-01 00:01 user:** Pipeline live. Run 25178277227 success after dropping osx-x64 (macos-13 runner queue stuck 35+min). 3 binary + nupkg uploaded to v1.2.1-rc1 release. NFR-3 pass: native binaries 4.8-5.5 MB each (< 80 MB).
