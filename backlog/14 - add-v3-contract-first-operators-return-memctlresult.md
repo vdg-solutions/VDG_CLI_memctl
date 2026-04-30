@@ -2,7 +2,7 @@
 id: 14
 type: task
 title: 'A.D.D V3 Contract First: Operators trả MemctlResult (Boundary DTO) thay MemctlOutcome anonymous'
-status: In Progress
+status: Done
 priority: high
 tags:
 - architecture
@@ -150,3 +150,7 @@ Constraint dependency rules A.D.D:
 **2026-04-30 08:39 user:** Phase 1 complete: Spec at docs/specs/14-spec.md (38 FR + 7 NFR, backward compat via snapshot baseline)
 
 **2026-04-30 08:43 user:** Phase 2 complete: Design at docs/designs/14-design.md. Mapper=switch expression. Search carriers=dedicated records. 14-step impl order with snapshot baseline first.
+
+**2026-04-30 09:01 user:** Phase 3 done: 25+ Operators refactored to typed Data. Mapper switch exhaustive (no fallback, throws on unknown). Build pass 0/0. Smoke test 10+ commands wire keys preserved. Pending: snapshot regression test suite, /qc Layer 1-3 formal pass, /review gatekeeper.
+
+**2026-04-30 09:11 user:** Phase 6 complete: merged to main (cee9471). 24/24 mapper tests pass. Pending: snapshot baseline regression infra (NFR-006, follow-up task). McpServerOperator relocation (#21) and versioning (#22) tracked separately.
