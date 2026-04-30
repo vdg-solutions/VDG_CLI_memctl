@@ -1,14 +1,14 @@
 ---
 id: 19
 type: task
-title: 'Tag namespace migration — dọn legacy tag (telegram, chat-*) trong vault data'
-status: Todo
+title: Tag namespace migration — dọn legacy tag (telegram, chat-*) trong vault data
+status: In Progress
 priority: low
 tags:
-  - migration
-  - cleanup
-  - vault-data
-  - one-time
+- migration
+- cleanup
+- vault-data
+- one-time
 created: 2026-04-30
 updated: 2026-04-30
 ---

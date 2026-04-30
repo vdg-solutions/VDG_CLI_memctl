@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
 namespace Memctl.Boundary;
@@ -240,6 +241,17 @@ public sealed class HookLogEntryDto
     [JsonPropertyName("action")]    public string  Action    { get; init; } = "";
     [JsonPropertyName("success")]   public bool    Success   { get; init; }
     [JsonPropertyName("error")]     public string? Error     { get; init; }
+}
+
+public sealed class MigrateTagsReportDto
+{
+    [JsonPropertyName("dry_run")]        public bool                       DryRun        { get; init; }
+    [JsonPropertyName("notes_scanned")]  public int                        NotesScanned  { get; init; }
+    [JsonPropertyName("notes_modified")] public int                        NotesModified { get; init; }
+    [JsonPropertyName("tags_replaced")]  public int                        TagsReplaced  { get; init; }
+    [JsonPropertyName("tags_removed")]   public int                        TagsRemoved   { get; init; }
+    [JsonPropertyName("removed_tags")]   public string[]                   RemovedTags   { get; init; } = [];
+    [JsonPropertyName("replace_map")]    public Dictionary<string, string> ReplaceMap    { get; init; } = new();
 }
 
 public sealed class HookStatusDto

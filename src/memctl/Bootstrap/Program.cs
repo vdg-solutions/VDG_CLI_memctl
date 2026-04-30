@@ -671,6 +671,31 @@ captureCmd.SetHandler(async ctx =>
 });
 root.AddCommand(captureCmd);
 
+// --- migrate-tags ---
+var mtReplaceOpt = new Option<string?>("--replace", "Comma-separated mappings: 'old=new,old2=new2'. Append '*' to old for prefix match (e.g. 'chat-*=thread-')");
+var mtRemoveOpt  = new Option<string?>("--remove",  "Comma-separated tags to drop. Append '*' for prefix match (e.g. 'user-*')");
+var mtDryRunOpt  = new Option<bool>   ("--dry-run", "Print what would change without writing");
+var migrateTagsCmd = new Command("migrate-tags", "Rewrite tags across the vault — one-time legacy cleanup helper");
+migrateTagsCmd.AddOption(mtReplaceOpt);
+migrateTagsCmd.AddOption(mtRemoveOpt);
+migrateTagsCmd.AddOption(mtDryRunOpt);
+migrateTagsCmd.SetHandler(ctx =>
+{
+    var g  = G(ctx);
+    if (RequireVault(g, ctx) is not { } vault) return;
+    var pr = ctx.ParseResult;
+
+    var (replaceExact, replacePrefix) = ParseReplaceArg(pr.GetValueForOption(mtReplaceOpt));
+    var (removeExact,  removePrefix)  = ParseRemoveArg (pr.GetValueForOption(mtRemoveOpt));
+
+    var op       = new MigrateTagsOperator(vaultReader, noteIndex);
+    var outcome  = op.Execute(vault, replaceExact, replacePrefix, removeExact, removePrefix,
+                              pr.GetValueForOption(mtDryRunOpt));
+    ResultPrinter.Print(outcome);
+    ctx.ExitCode = outcome.Success ? 0 : 1;
+});
+root.AddCommand(migrateTagsCmd);
+
 // --- hook-status ---
 var hookStatusCmd = new Command("hook-status", "Show recent hook activity (capture, context-inject) for debug");
 hookStatusCmd.SetHandler(ctx =>
@@ -701,6 +726,39 @@ static string ExtractPromptText(string raw)
     }
     catch { /* not valid JSON — use raw */ }
     return raw;
+}
+
+// Tag migration parsers — shared between Bootstrap CLI handler and tests
+static (Dictionary<string, string> exact, Dictionary<string, string> prefix) ParseReplaceArg(string? raw)
+{
+    var exact  = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    var prefix = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    if (string.IsNullOrWhiteSpace(raw)) return (exact, prefix);
+    foreach (var pair in raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+    {
+        var eq = pair.IndexOf('=');
+        if (eq <= 0) continue;
+        var lhs = pair[..eq].Trim();
+        var rhs = pair[(eq + 1)..].Trim();
+        if (lhs.EndsWith('*'))
+            prefix[lhs[..^1]] = rhs.TrimEnd('*');
+        else
+            exact[lhs] = rhs;
+    }
+    return (exact, prefix);
+}
+
+static (List<string> exact, List<string> prefix) ParseRemoveArg(string? raw)
+{
+    var exact  = new List<string>();
+    var prefix = new List<string>();
+    if (string.IsNullOrWhiteSpace(raw)) return (exact, prefix);
+    foreach (var item in raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+    {
+        if (item.EndsWith('*')) prefix.Add(item[..^1]);
+        else                    exact.Add(item);
+    }
+    return (exact, prefix);
 }
 
 // Hook Protocol v1 payload DTOs

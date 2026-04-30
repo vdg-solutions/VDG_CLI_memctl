@@ -17,6 +17,7 @@ public static class MemctlResultMapper
             VaultStatus status                => MapStatus(status),
             VaultRef vref                     => MapVaultRef(vref),
             HookStatus hs                     => MapHookStatus(hs),
+            MigrateTagsReport mt              => MapMigrateTags(mt),
             WeightChange wc                   => MapWeight(wc),
             DecayReport dr                    => MapDecay(dr),
             CaptureReport cr                  => MapCapture(cr),
@@ -91,6 +92,17 @@ public static class MemctlResultMapper
     };
 
     public static VaultRefDto MapVaultRef(VaultRef v) => new() { Vault = v.Vault };
+
+    public static MigrateTagsReportDto MapMigrateTags(MigrateTagsReport m) => new()
+    {
+        DryRun        = m.DryRun,
+        NotesScanned  = m.NotesScanned,
+        NotesModified = m.NotesModified,
+        TagsReplaced  = m.TagsReplaced,
+        TagsRemoved   = m.TagsRemoved,
+        RemovedTags   = m.RemovedTags.ToArray(),
+        ReplaceMap    = new System.Collections.Generic.Dictionary<string, string>(m.ReplaceMap),
+    };
 
     public static HookStatusDto MapHookStatus(HookStatus s) => new()
     {
