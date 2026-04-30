@@ -180,6 +180,12 @@ public sealed class McpServerOperator(
                     req: [("id", "string", "Note ID or relative file path")],
                     opt: [],
                     dataDtoName: "NoteDto"),
+
+                MakeTool("search_help",
+                    "Return a markdown table explaining when to use each search variant (search, search_semantic, search_tags, search_links, search_date). Call once when unsure which search tool fits the query.",
+                    req: [],
+                    opt: [],
+                    dataDtoName: null),
             },
         },
     };
@@ -209,6 +215,7 @@ public sealed class McpServerOperator(
                 "append"          => await CallAppendAsync(args, ct),
                 "set_weight"      => CallSetWeight(args),
                 "delete"          => CallDelete(args),
+                "search_help"     => CallSearchHelp(),
                 _                 => null,
             };
 
@@ -279,6 +286,21 @@ public sealed class McpServerOperator(
         var id    = Str(args, "id") ?? throw new InvalidOperationException("'id' is required");
         var depth = Int(args, "depth", 1);
         return new SearchLinksOperator(vaultReader, index).Execute(vaultPath, id, depth);
+    }
+
+    private static MemctlOutcome CallSearchHelp()
+    {
+        const string guide = """
+| Tool             | When to use                                                                                  |
+|------------------|----------------------------------------------------------------------------------------------|
+| search           | Default. Hybrid BM25 + semantic. General queries or when you don't know the exact terms.     |
+| search_semantic  | Conceptual queries — exact words may not appear in notes (e.g. "distributed consensus").     |
+| search_text      | Exact phrase or proper noun (BM25 only, no semantic blur).                                   |
+| search_tags      | User mentions a tag explicitly (e.g. 'tagged crypto').                                       |
+| search_links     | Walk the wikilinks graph from a known source note.                                           |
+| search_date      | Time-range queries (e.g. 'what did I work on last week').                                    |
+""";
+        return MemctlOutcome.Ok("search_help", guide, null);
     }
 
     private MemctlOutcome CallGetIdentity()
