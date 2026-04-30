@@ -2,13 +2,13 @@
 id: 21
 type: task
 title: 'A.D.D V3: McpServerOperator → Implementations/Mcp (Web Adapter pattern)'
-status: Todo
+status: Done
 priority: normal
 tags:
-  - architecture
-  - refactor
-  - a.d.d-v3
-  - mcp
+- architecture
+- refactor
+- a.d.d-v3
+- mcp
 created: 2026-04-30
 updated: 2026-04-30
 ---
@@ -103,3 +103,7 @@ McpServerAdapter → IMemctlResultMapper.ToResult(outcome) → MemctlResult → 
 ## Effort
 
 ~6-8h.
+
+## Comments
+
+**2026-04-30 09:29 user:** Phase 6: merged. McpServerAdapter at Implementations/Mcp. Operators layer free of MCP protocol code. Documented A.D.D leak: adapter still uses Operator classes directly (port extraction deferred).

@@ -10,6 +10,7 @@ using Memctl.Implementations.Config;
 using Memctl.Implementations.Embedding;
 using Memctl.Implementations.Index;
 using Memctl.Implementations.Llm;
+using Memctl.Implementations.Mcp;
 using Memctl.Implementations.Vault;
 using Memctl.Operators;
 
@@ -419,7 +420,7 @@ mcpCmd.SetHandler(async ctx =>
 {
     var g     = G(ctx);
     var vault = RequireVaultOrInit(g);
-    var op    = new McpServerOperator(vaultReader, noteIndex, vault, g.ModelDir);
+    var op    = new McpServerAdapter(vaultReader, noteIndex, vault, g.ModelDir);
     await op.RunAsync(ctx.GetCancellationToken());
 });
 root.AddCommand(mcpCmd);
