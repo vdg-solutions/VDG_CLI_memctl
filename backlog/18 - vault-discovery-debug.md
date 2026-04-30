@@ -2,7 +2,7 @@
 id: 18
 type: task
 title: Vault discovery debug — Claude Code biết tại sao vault auto-detect fail
-status: In Progress
+status: Done
 priority: low
 tags:
 - vault-locator
@@ -83,3 +83,7 @@ Cho Claude Code chủ động biết vault state khi memory empty.
 ## Effort
 
 ~2h.
+
+## Comments
+
+**2026-04-30 09:19 user:** Phase 6: merged. status verbose. MCP initialize hint skipped — RequireVaultOrInit makes MCP path always have a vault.
