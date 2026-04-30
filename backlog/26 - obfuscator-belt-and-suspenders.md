@@ -1,154 +1,159 @@
 ---
 id: 26
 type: task
-title: 'Obfuscator hardening — ConfuserEx integration belt-and-suspenders với AOT'
+title: 'Anti-RE hardening — string encoding + anti-debug + anti-tamper on AOT'
 status: Todo
-priority: low
+priority: high
 tags:
-  - hardening
-  - anti-reverse-engineer
-  - obfuscation
-  - optional
+- hardening
+- anti-reverse-engineer
+- anti-debug
+- anti-tamper
 created: 2026-04-30
 updated: 2026-04-30
 ---
 
 ## Description
 
-Optional follow-up to task #24 (AOT). Native AOT đã strip IL nhưng không strip:
-- Embedded string literals (error messages, identity hint, search_help table, JSON property names if not stripped)
-- Symbol names trong native binary nếu compile chưa strip đủ
-- Embedded resources (model paths, config schemas)
+Native AOT (#24 shipped) strip IL nhưng còn để string literals dạng plaintext + symbol metadata trong native binary. Threat: ai đó decompile + Python rewrite memctl trong 1 ngày từ string literals + control flow + .NET BCL call sequence visible. Task này add 3 layer hardening lên trên AOT: (1) encode string literals nội bộ tại compile-time, (2) self-hash anti-tamper khi startup, (3) anti-debug attach detection.
 
-Reverse engineer dùng tool như Ghidra/IDA Pro vẫn có thể recover control flow + string content từ AOT binary. Obfuscator add layer:
-- String encryption (decrypt at runtime)
-- Control flow flattening
-- Symbol renaming
-- Resource encryption
-
-Combine với AOT = belt-and-suspenders. Không cần làm trừ khi threat model yêu cầu.
-
-## Khi nào nên làm task này
-
-- Threat model: đối thủ pro reverse-engineer (compete, IP theft, security research adversary).
-- Sau khi #24 AOT đã ship + verify hoạt động.
-- Không trước khi #24 ship — adding obfuscator vào JIT build chỉ gây flake mà không gain anti-RE thực sự (IL vẫn decompilable).
-
-## Mục tiêu
-
-- Strings literal trong native binary bị encrypt — `strings memctl.exe | grep -i hint` không trả ra plaintext.
-- Method symbols renamed — không còn tên có nghĩa trong disassembly.
-- Resource files encrypted.
-- Binary vẫn chạy đúng — 0 regression.
-- CI/CD vẫn build clean.
+Public surface (CLI commands, JSON wire keys, MCP protocol, --help) giữ plaintext — tools/users/AI client cần đọc được.
 
 ## Implementation
 
 ### Step 0 — Prereq fail-fast
-- Verify task #24 AOT shipped + green: `git log main --oneline | grep -q 'feat.*aot'` || exit "Blocked by #24".
-- Verify ConfuserEx CLI available: `which Confuser.CLI || which ConfuserEx.CLI` || exit "[USER-ACTION-REQUIRED] Download ConfuserEx 2 from https://github.com/mkaring/ConfuserEx/releases, extract to PATH".
+- Verify task #24 AOT shipped + green: `git log main --oneline | grep -q 'aot'` || exit "Blocked by #24".
 - Verify `dotnet build -c Release` clean: `dotnet build src/memctl/memctl.csproj -c Release --nologo -v q` || exit "Fix build first".
+- Verify MSVC linker present: `where /R "C:\Program Files (x86)\Microsoft Visual Studio" link.exe` returns hits.
 
-### Option A — ConfuserEx 2 (free, OSS, .NET community)
+### Step 1 — Roslyn source generator for string encoding
 
-ConfuserEx vốn target .NET IL → áp dụng PRE-AOT compile. Workflow:
-```
-dotnet build -c Release  →  ConfuserEx (obfuscate IL)  →  dotnet publish -p:PublishAot=true (compile to native)
-```
+- **File CREATE:** `src/Memctl.SourceGen/StringEncodeGenerator.cs` — Roslyn `IIncrementalGenerator`. Scans for calls to `Memctl.Hardening.S.Of("plaintext")` literal. At compile-time, encodes plaintext with XOR + per-string nonce (derived from string content hash). Replaces with `S.Decode(byte[]{...}, byte)`.
+- **File CREATE:** `src/Memctl.SourceGen/Memctl.SourceGen.csproj` — net10.0, references `Microsoft.CodeAnalysis.CSharp` 4.x.
+- **File CREATE:** `src/memctl/Hardening/S.cs` — runtime decoder. `S.Decode(byte[] buf, byte key)` returns `Encoding.UTF8.GetString(...)` post-XOR.
 
-ConfuserEx config (`memctl.crproj`):
-```xml
-<project outputDir="obf" baseDir=".">
-  <module path="src/memctl/bin/Release/net10.0/memctl.dll">
-    <rule pattern="true" preset="aggressive">
-      <protection id="rename" />
-      <protection id="ctrl flow" />
-      <protection id="constants" />          <!-- string encryption -->
-      <protection id="resources" />
-      <protection id="anti debug" />
-    </rule>
-  </module>
-</project>
-```
+### Step 2 — String encoding callsite migration (manual selection)
 
-Run: `Confuser.CLI.exe memctl.crproj` → trả ra `obf/memctl.dll` đã obfuscated. Sau đó AOT publish từ obfuscated DLL.
+Encode strings in: SQL queries, regex patterns, identity hint content, search_help markdown, file path templates, log messages, MCP method routing.
 
-### Option B — ObfuscarMembership (lightweight, less aggressive)
+NEVER encode: `JsonPropertyName` attribute args, System.CommandLine option/arg names, public exception messages already in user-visible flows, README content.
 
-Chỉ rename symbols. Không encrypt string. Effort thấp hơn nhưng gain ít hơn.
+- **File MODIFY:** `src/memctl/Implementations/Index/SqliteNoteIndex.cs` — wrap SQL strings via `S.Of`.
+- **File MODIFY:** `src/memctl/Operators/IdentityOperator.cs` — wrap identity content template.
+- **File MODIFY:** `src/memctl/Implementations/Mcp/McpServerAdapter.cs` — wrap method routing string keys ("initialize", "tools/list", "tools/call", "ping") + tool descriptions.
+- **File MODIFY:** ~20 callsites total via grep audit.
 
-### Option C — Commercial: Dotfuscator, SmartAssembly, Eazfuscator
+### Step 3 — Anti-debug
 
-Pricing $$. Skip unless enterprise need.
+- **File CREATE:** `src/memctl/Hardening/AntiDebug.cs`:
+  ```csharp
+  using System.Diagnostics;
+  using System.Runtime.InteropServices;
 
-**Recommend A.**
+  internal static class AntiDebug
+  {
+      [DllImport("kernel32.dll")] private static extern bool IsDebuggerPresent();
 
-### Pipeline integration
+      public static void Check()
+      {
+          if (Environment.GetEnvironmentVariable("MEMCTL_ALLOW_DEBUG") == "1") return;
+          if (Debugger.IsAttached || (OperatingSystem.IsWindows() && IsDebuggerPresent()))
+              Environment.FailFast("");
+      }
+  }
+  ```
+- **File MODIFY:** `src/memctl/Bootstrap/Program.cs:1` — invoke `AntiDebug.Check()` first line of Main.
 
-Thêm step trước AOT publish trong build script + CI:
+### Step 4 — Anti-tamper (self-hash)
+
+- **File CREATE:** `src/memctl/Hardening/SelfHash.cs`:
+  ```csharp
+  internal static class SelfHash
+  {
+      // BAKED at build via MSBuild target — replaced post-compile.
+      private const string EXPECTED = "__SELF_HASH_PLACEHOLDER__";
+
+      public static void Verify()
+      {
+          if (EXPECTED.StartsWith("__SELF_HASH_PLACE")) return;  // dev build, skip
+          var path = System.Diagnostics.Process.GetCurrentProcess().MainModule!.FileName;
+          using var fs = File.OpenRead(path);
+          var hash = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(fs));
+          if (!hash.Equals(EXPECTED, StringComparison.OrdinalIgnoreCase))
+              Environment.FailFast("");
+      }
+  }
+  ```
+- **File MODIFY:** `src/memctl/Bootstrap/Program.cs` — call `SelfHash.Verify()` after AntiDebug.
+- **File CREATE:** `scripts/bake-selfhash.ps1` — runs after AOT publish, computes SHA256 of memctl.exe, replaces placeholder via byte search-and-replace in the binary itself (in-place edit).
+
+### Step 5 — Csproj wiring
+
+- **File MODIFY:** `src/memctl/memctl.csproj` — add `<ProjectReference Include="..\Memctl.SourceGen\Memctl.SourceGen.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />`.
+
+### Step 6 — Build + verify
+
 ```bash
-# build-portable.sh additions
-dotnet build src/memctl/memctl.csproj -c Release
-ConfuserEx.CLI memctl.crproj
-# Replace bin/Release/.../memctl.dll with obfuscated version
-cp obf/memctl.dll src/memctl/bin/Release/net10.0/memctl.dll
-dotnet publish src/memctl/memctl.csproj -c Release -r $RID -p:PublishAot=true ...
+dotnet publish src/memctl/memctl.csproj -c Release -r win-x64 -p:PublishAot=true -o publish-aot
+pwsh scripts/bake-selfhash.ps1 -Binary publish-aot/memctl.exe
+publish-aot/memctl.exe status   # should run clean
 ```
-
-CI workflow (extend task #25):
-- New job `obfuscate` between `build` and `package` per matrix
-- Or run obfuscation locally và commit obfuscated assembly (avoid needing ConfuserEx in CI)
-
-### Testing
-
-Post-obfuscation smoke test:
-- All 12+ commands run, JSON output identical to non-obfuscated build
-- Reflection-dependent code paths (em dùng AOT-friendly version per #24, no reflection) — không break
-- ONNX Runtime still loads model
-- Strings inspection: `strings memctl.exe | grep "search_help\|hint\|memctl"` trả 0 hits của business logic (only system runtime strings)
 
 ## Acceptance Criteria
 
 | ID | Criterion | Verify |
-|---|---|---|
-| FR-1 | Build pipeline tích hợp obfuscator step | grep build script |
-| FR-2 | Obfuscated binary chạy đầy đủ command + MCP tools | smoke test full surface |
-| FR-3 | `strings memctl.exe \| grep -E "memctl-result-mapper\|MemctlOutcome\|HookStatus"` trả 0 hits | run after build |
-| FR-4 | ILSpy/Ghidra inspection: no readable method names | manual inspection |
-| FR-5 | Binary size delta < 30% vs non-obfuscated AOT | compare sizes |
-| FR-6 | All 24 mapper unit tests pass post-obfuscation (test against obfuscated assembly) | dotnet test với reference đã swap |
-| NFR-1 | ConfuserEx config committed at repo root | check `memctl.crproj` exists |
-| NFR-2 | Obfuscation preserves anti-debug detection (optional protection) | manual verify |
-| NFR-3 | License compatibility — ConfuserEx MIT, OK for commercial use | review LICENSE |
+|----|-----------|--------|
+| FR-1 | AOT publish 0 IL warnings post-source-gen | `grep -cE "IL2026\|IL3050" build.log` returns 0 |
+| FR-2 | Source generator emits encoded strings | `grep "S.Of(" src/memctl/**/*.cs` shows ≥15 callsites |
+| FR-3 | Decoded strings round-trip exact match | new test `tests/memctl.Tests/Hardening/StringEncodeTests.cs` 5+ tests pass |
+| FR-4 | Public interface strings unchanged | `grep -r "JsonPropertyName" src/memctl/Boundary` returns same count pre/post |
+| FR-5 | CLI surface unchanged | `memctl --help` output identical to v1.2.0 (diff < 5 lines) |
+| FR-6 | MCP tools/list response identical | snapshot diff vs v1.2.0 returns 0 lines |
+| FR-7 | Anti-debug check runs first | `Debugger.IsAttached` OR `IsDebuggerPresent` triggers `Environment.FailFast` (verify with debugger attached test) |
+| FR-8 | Anti-tamper baked hash matches binary | tamper test: flip 1 byte in memctl.exe → run → exit non-zero |
+| FR-9 | `MEMCTL_ALLOW_DEBUG=1` env var bypass | set var + attach debugger → memctl runs normally (dev escape hatch) |
+| FR-10 | All 42 existing tests still pass | `dotnet test --nologo` 42/42 |
+| FR-11 | Cold-start regression < 50ms vs v1.2.0 | `time memctl status` 5x average; baseline 164ms; max 214ms |
+| NFR-1 | Encoded strings not visible via `strings` | binary scan for "DROP TABLE\|CREATE TABLE\|SELECT " in `publish-aot/memctl.exe` returns 0 hits |
+| NFR-2 | Anti-debug code is AOT-clean | 0 reflection in Hardening/* |
+| NFR-3 | scripts/bake-selfhash.ps1 idempotent | run 2x same binary, second run no-op |
+| NFR-4 | README documents `MEMCTL_ALLOW_DEBUG` | grep README returns hit |
 
 ## Out of Scope
 
-- Anti-tamper / integrity check (separate task).
 - Code signing / Authenticode (separate task).
-- Runtime license verification (DRM — separate concern, not anti-RE).
+- DRM / license server (separate concern).
+- Anti-decompile native binary (out of scope — AOT alone, no Themida/VMProtect).
+- BitMono / ConfuserEx integration (evaluated; not used — manual code AOT-safer).
+- Encoding `JsonPropertyName` / CLI option strings (public surface, must stay plain).
 
 ## Dependencies
 
-- **Blocked by task #24** (AOT) — obfuscator chỉ gain trên top of AOT-ready code.
-- **Soft depend task #25** (CI/CD) — wiring obfuscator vào CI dễ hơn nếu CI đã set up.
+- Blocked by #24 (AOT shipped). Done.
+- Soft depend #25 (CI extension to bake self-hash + run anti-debug verify test).
 
 ## Risk
 
-- **High**: Aggressive obfuscation có thể break code paths sử dụng reflection. Mitigation: task #24 đã eliminate reflection — obfuscator chỉ cần worry về remaining BCL reflection (System.Text.Json source-gen has zero runtime reflection nếu wired đúng).
-- **Medium**: Anti-debug protection có thể fail trên user dev machine nếu họ debug for legitimate reasons. Mitigation: ship 2 build flavors hoặc remove anti-debug protection.
-- **Low**: Binary size growth. Mitigation: profile, toggle individual ConfuserEx protections.
+| Risk | Mitigation |
+|------|-----------|
+| Source gen breaks AOT compile | Test via `dotnet publish` after each new encoded callsite; rollback callsite |
+| Self-hash baking corrupts binary | Use byte search-and-replace, not arbitrary edit; backup pre-bake; verify via file probe post-bake |
+| Anti-debug false positive on Windows Defender / EDR | `MEMCTL_ALLOW_DEBUG=1` escape; ship 2 flavors if too many reports |
+| Determined reverser patches out check | Accept — anti-debug only blocks casual inspection; defense in depth, not absolute |
+| String encoding XOR weak | Acceptable for hobby-grade. NetReactor + AES is overkill cho threat model |
 
 ## Effort
 
-~4-6h:
-- 1h: install ConfuserEx, write `memctl.crproj` config
-- 1h: integrate into `build-portable.sh`
-- 1h: integrate into GitHub Actions workflow (task #25 extension)
-- 1-2h: smoke test all command surface + adjust protections that break things
-- 1h: documentation
+~8-10h:
+- 2h: Roslyn source generator (StringEncodeGenerator.cs)
+- 1h: runtime decoder S.cs
+- 2h: pick + wrap ~20 callsites
+- 1h: AntiDebug + SelfHash code
+- 1h: bake-selfhash.ps1 script
+- 1h: tests (StringEncodeTests, tamper test)
+- 1h: AOT verify, smoke, snapshot diff
+- 1h: docs
 
-## Notes
+## User Actions Required
 
-- This task is **optional**. Native AOT alone (#24) đủ cho 90% use case. Obfuscator chỉ thêm friction cho determined attacker.
-- Realistic threat assessment: nếu code có business logic độc đáo (proprietary algorithm) → đáng làm. Nếu chỉ là tool wrapper quanh public APIs (Obsidian vault, ONNX Runtime, OpenAI) → không gain RE protection nào đáng kể, vì attacker có thể chỉ gọi same APIs trực tiếp.
-- Em recommend: ship #24 + #25 trước, đánh giá xem có ai actually try reverse-engineer trong 3-6 tháng. Nếu có dấu hiệu → activate #26. Nếu không → giữ optional.
+- (none — fully bot-actionable since #24 prereqs met)
