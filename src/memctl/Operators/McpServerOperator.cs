@@ -343,10 +343,20 @@ Before ending session:
     private string? GetIdentityContent()
     {
         var noteId = index.GetMetadata("identity_note_id");
-        if (noteId is null) return SessionProtocol.TrimStart();
+        if (noteId is null) return IdentitySetupHint + SessionProtocol.TrimStart();
         var note = index.GetById(noteId);
-        return note is null ? SessionProtocol.TrimStart() : note.Content + SessionProtocol;
+        return note is null
+            ? IdentitySetupHint + SessionProtocol.TrimStart()
+            : note.Content + SessionProtocol;
     }
+
+    private const string IdentitySetupHint = """
+> **Tip:** No identity note set for this vault. Pin one with
+> `memctl identity set <note-id>` so its content is injected into every
+> session's MCP `serverInfo.instructions`. Find candidates with
+> `memctl list` or `memctl search-tags identity`.
+
+""";
 
     // --- embedding lazy init ---
 
