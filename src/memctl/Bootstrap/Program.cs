@@ -511,10 +511,16 @@ contextInjectCmd.SetHandler(async ctx =>
         var context = new ContextInjectOperator(vaultReader, noteIndex)
             .Execute(vaultPath, stdinText);
 
+        Memctl.Operators.HookLog.Record(vaultPath, "context-inject", true, null);
         if (context is not null)
             Console.Write(context);
     }
-    catch { /* NFR-002: never crash hook */ }
+    catch (Exception ex)
+    {
+        var cwd = Directory.GetCurrentDirectory();
+        var v   = VaultLocator.FindVaultFrom(cwd);
+        if (v is not null) Memctl.Operators.HookLog.Record(v, "context-inject", false, ex.Message);
+    }
     ctx.ExitCode = 0;
 });
 root.AddCommand(contextInjectCmd);
@@ -616,6 +622,7 @@ captureCmd.SetHandler(async ctx =>
             var turns  = new (string Role, string Content)[] { (role, text) };
             var op     = new CaptureOperator(vaultReader, noteIndex, emb);
             var result = op.Execute(vault, sesId, turns, dryRun);
+            Memctl.Operators.HookLog.Record(vault, "capture", result.Success, result.Success ? null : result.Message);
             if (dryRun) ResultPrinter.Print(result);
             ctx.ExitCode = 0;
             return;
@@ -646,12 +653,29 @@ captureCmd.SetHandler(async ctx =>
         var turns2 = payload.Transcript.Select(t => (t.Role, t.Content)).ToArray();
         var op2    = new CaptureOperator(vaultReader, noteIndex, emb2);
         var res    = op2.Execute(vaultPath, payload.SessionId ?? sesId, turns2, dryRun);
+        Memctl.Operators.HookLog.Record(vaultPath, "capture", res.Success, res.Success ? null : res.Message);
         if (dryRun) ResultPrinter.Print(res);
     }
-    catch { /* NFR-002: never crash hook */ }
+    catch (Exception ex)
+    {
+        // NFR-002: hook never crash, but record the failure for debug
+        var cwd = Directory.GetCurrentDirectory();
+        var v   = VaultLocator.FindVaultFrom(cwd);
+        if (v is not null) Memctl.Operators.HookLog.Record(v, "capture", false, ex.Message);
+    }
     ctx.ExitCode = 0;
 });
 root.AddCommand(captureCmd);
+
+// --- hook-status ---
+var hookStatusCmd = new Command("hook-status", "Show recent hook activity (capture, context-inject) for debug");
+hookStatusCmd.SetHandler(ctx =>
+{
+    var g = G(ctx);
+    if (RequireVault(g, ctx) is not { } vault) return;
+    ResultPrinter.Print(new HookStatusOperator().Execute(vault));
+});
+root.AddCommand(hookStatusCmd);
 
 return await root.InvokeAsync(args);
 
