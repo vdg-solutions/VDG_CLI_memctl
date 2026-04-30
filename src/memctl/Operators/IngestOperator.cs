@@ -65,10 +65,8 @@ public sealed class IngestOperator(IVaultReader vault, INoteIndex index, GemmaEm
             semanticHint = "Semantic lint: never run. Run: memctl lint --semantic";
         }
 
-        object resultData = semanticHint is not null
-            ? new { indexed = added, total = files.Count, vault = vaultPath, model, semantic_lint_hint = semanticHint }
-            : new { indexed = added, total = files.Count, vault = vaultPath, model };
-        return MemctlOutcome.Ok("ingest", $"Indexed {added}/{files.Count} notes", resultData);
+        return MemctlOutcome.Ok("ingest", $"Indexed {added}/{files.Count} notes",
+            new IngestReport(added, files.Count, vaultPath, model, semanticHint));
     }
 
     public static bool NeedsIngest(string vaultPath)

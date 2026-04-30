@@ -16,16 +16,8 @@ public sealed class StatusOperator
         var indexed     = File.Exists(dbPath);
         var noteCount   = indexed ? CountNotes(dbPath) : 0;
 
-        return MemctlOutcome.Ok("status", modelReady ? "Ready" : "Model not downloaded", new
-        {
-            model_ready   = modelReady,
-            model_path    = modelPath,
-            model_size_mb = modelMb,
-            vault_exists  = vaultExists,
-            vault_indexed = indexed,
-            note_count    = noteCount,
-            index_path    = dbPath,
-        });
+        return MemctlOutcome.Ok("status", modelReady ? "Ready" : "Model not downloaded",
+            new VaultStatus(modelReady, modelPath, modelMb, vaultExists, indexed, noteCount, dbPath));
     }
 
     internal static bool IsModelReady(out string modelPath, out int modelMb)

@@ -51,14 +51,7 @@ public sealed class AddOperator(IVaultReader vault, INoteIndex index, GemmaEmbed
         vault.WriteNote(withEmbed, vaultPath, fileName);
         index.Upsert(withEmbed);
 
-        return MemctlOutcome.Ok("add", $"Added note: {note.Title}", new
-        {
-            id       = note.Id,
-            file     = note.FilePath,
-            title    = note.Title,
-            tags     = note.Tags,
-            links    = note.Links,
-        });
+        return MemctlOutcome.Ok("add", $"Added note: {note.Title}", withEmbed);
     }
 
     private static string ExtractTitle(string content)

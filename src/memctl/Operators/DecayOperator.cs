@@ -3,8 +3,6 @@ using Memctl.CoreAbstractions.Ports;
 
 namespace Memctl.Operators;
 
-internal sealed record DecayReport(int Decayed, int Archived, int Unchanged, int AlreadyArchived);
-
 public sealed class DecayOperator(IVaultReader vaultReader, INoteIndex index)
 {
     private const float  ArchiveThreshold  = 0.05f;
@@ -23,7 +21,7 @@ public sealed class DecayOperator(IVaultReader vaultReader, INoteIndex index)
         if (!dryRun && index.GetMetadata(LastDecayDateKey) == todayStr)
         {
             return MemctlOutcome.Ok("decay", "Already ran today — skipped",
-                new { decayed = 0, archived = 0, unchanged = 0, already_archived = 0, already_run_today = true });
+                new DecayReport(0, 0, 0, 0, true, null));
         }
 
         var now   = DateTime.UtcNow;
@@ -75,15 +73,7 @@ public sealed class DecayOperator(IVaultReader vaultReader, INoteIndex index)
             index.SetMetadata(LastDecayDateKey, todayStr);
         }
 
-        var report = new DecayReport(decayed, newlyArchived, unchanged, alreadyArchived);
         return MemctlOutcome.Ok("decay", $"Decayed {decayed} notes, archived {newlyArchived}",
-            new
-            {
-                decayed          = report.Decayed,
-                archived         = report.Archived,
-                unchanged        = report.Unchanged,
-                already_archived = report.AlreadyArchived,
-                dry_run          = dryRun,
-            });
+            new DecayReport(decayed, newlyArchived, unchanged, alreadyArchived, null, dryRun));
     }
 }

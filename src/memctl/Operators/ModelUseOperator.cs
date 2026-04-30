@@ -21,6 +21,6 @@ public sealed class ModelUseOperator
         MemctlConfig.Save(new MemctlConfig { DefaultModel = modelName });
 
         return MemctlOutcome.Ok("model-use", $"Default model → {modelName}",
-            new { model = modelName });
+            new ModelSelection(modelName));
     }
 }

@@ -12,13 +12,7 @@ public sealed class StatsOperator(IVaultReader vaultReader, INoteIndex index)
 
         index.Initialize(IngestOperator.DbPath(vaultPath));
         var (noteCount, tagCount, linkCount, indexBytes) = index.GetStats();
-        return MemctlOutcome.Ok("stats", "Vault statistics", new
-        {
-            note_count  = noteCount,
-            tag_count   = tagCount,
-            link_count  = linkCount,
-            index_bytes = indexBytes,
-            vault_path  = Path.GetFullPath(vaultPath),
-        });
+        return MemctlOutcome.Ok("stats", "Vault statistics",
+            new VaultStats(noteCount, tagCount, linkCount, indexBytes, Path.GetFullPath(vaultPath)));
     }
 }

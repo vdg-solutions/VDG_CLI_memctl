@@ -19,12 +19,7 @@ public sealed class IdentityOperator(IVaultReader vaultReader, INoteIndex index)
         index.SetMetadata("identity_note_id", note.Id);
         index.SetWeight(note.Id, 1.0f);
 
-        return MemctlOutcome.Ok("identity", $"Identity note set: {note.Title}", new
-        {
-            id    = note.Id,
-            file  = note.FilePath,
-            title = note.Title,
-        });
+        return MemctlOutcome.Ok("identity", $"Identity note set: {note.Title}", note);
     }
 
     public MemctlOutcome ExecuteGet(string vaultPath)
@@ -42,6 +37,6 @@ public sealed class IdentityOperator(IVaultReader vaultReader, INoteIndex index)
         if (note is null)
             return MemctlOutcome.Ok("identity", "Identity note not found (may have been deleted)", null);
 
-        return MemctlOutcome.Ok("identity", "Identity note", GetOperator.NoteToData(note));
+        return MemctlOutcome.Ok("identity", "Identity note", note);
     }
 }

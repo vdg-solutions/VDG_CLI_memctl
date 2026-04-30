@@ -37,7 +37,7 @@ public sealed class CaptureOperator(IVaultReader vaultReader, INoteIndex index, 
         {
             var preview = $"# Session {date} — {safeId}\n\n{FormatTurns(filteredTurns)}";
             return MemctlOutcome.Ok("capture", preview,
-                new { dryRun = true, file = relPath, turns = filteredTurns.Count });
+                new CaptureReport(true, relPath, filteredTurns.Count, null));
         }
 
         if (!File.Exists(absPath))
@@ -71,7 +71,7 @@ public sealed class CaptureOperator(IVaultReader vaultReader, INoteIndex index, 
         index.Upsert(stored);
 
         return MemctlOutcome.Ok("capture", $"Created session note: {relPath}",
-            new { file = relPath, turns = turns.Count, weight = SessionNoteWeight });
+            new CaptureReport(false, relPath, turns.Count, SessionNoteWeight));
     }
 
     private MemctlOutcome AppendNote(
@@ -92,7 +92,7 @@ public sealed class CaptureOperator(IVaultReader vaultReader, INoteIndex index, 
         index.Upsert(stored);
 
         return MemctlOutcome.Ok("capture", $"Appended to session note: {relPath}",
-            new { file = relPath, turns = turns.Count });
+            new CaptureReport(false, relPath, turns.Count, null));
     }
 
     private static bool IsNoise(string content)

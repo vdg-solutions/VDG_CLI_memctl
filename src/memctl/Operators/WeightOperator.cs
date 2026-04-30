@@ -23,11 +23,8 @@ public sealed class WeightOperator(IVaultReader vaultReader, INoteIndex index)
         var clamped = Math.Clamp(parsed, 0.0f, 2.0f);
         index.SetWeight(note.Id, clamped);
 
-        return MemctlOutcome.Ok("weight", $"Weight set to {(float)Math.Round(clamped, 2)}", new
-        {
-            id     = note.Id,
-            file   = note.FilePath,
-            weight = (float)Math.Round(clamped, 2),
-        });
+        var rounded = (float)Math.Round(clamped, 2);
+        return MemctlOutcome.Ok("weight", $"Weight set to {rounded}",
+            new WeightChange(note.Id, note.FilePath, rounded));
     }
 }

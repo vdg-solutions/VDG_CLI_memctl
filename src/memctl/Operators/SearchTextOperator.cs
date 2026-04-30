@@ -13,11 +13,7 @@ public sealed class SearchTextOperator(IVaultReader vaultReader, INoteIndex inde
         index.Initialize(IngestOperator.DbPath(vaultPath));
         var hits = index.SearchBm25(query, limit, folderPrefix);
 
-        return MemctlOutcome.Ok("search-text", $"{hits.Count} results", new
-        {
-            query,
-            count   = hits.Count,
-            results = hits.Select(h => GetOperator.NoteToData(h.Note, h.Score)),
-        });
+        return MemctlOutcome.Ok("search-text", $"{hits.Count} results",
+            new SearchHitsResult(query, hits));
     }
 }

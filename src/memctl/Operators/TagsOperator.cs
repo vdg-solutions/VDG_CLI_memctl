@@ -11,8 +11,8 @@ public sealed class TagsOperator(IVaultReader vaultReader, INoteIndex index)
             new IngestOperator(vaultReader, index, null).Execute(vaultPath);
 
         index.Initialize(IngestOperator.DbPath(vaultPath));
-        var tags = index.GetTagStats();
-        return MemctlOutcome.Ok("tags", $"{tags.Count} tags",
-            new { count = tags.Count, tags = tags.Select(t => new { tag = t.Tag, count = t.Count }) });
+        var tags     = index.GetTagStats();
+        var tagCounts = tags.Select(t => new TagCount(t.Tag, t.Count)).ToList();
+        return MemctlOutcome.Ok("tags", $"{tags.Count} tags", (IReadOnlyList<TagCount>)tagCounts);
     }
 }

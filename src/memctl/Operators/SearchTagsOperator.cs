@@ -13,12 +13,7 @@ public sealed class SearchTagsOperator(IVaultReader vaultReader, INoteIndex inde
         index.Initialize(IngestOperator.DbPath(vaultPath));
         var notes = index.SearchByTags(tags, matchAll, limit);
 
-        return MemctlOutcome.Ok("search-tags", $"{notes.Count} results", new
-        {
-            tags,
-            match_all = matchAll,
-            count     = notes.Count,
-            results   = notes.Select(n => GetOperator.NoteToData(n)),
-        });
+        return MemctlOutcome.Ok("search-tags", $"{notes.Count} results",
+            new SearchTagsHitsResult(tags, matchAll, notes));
     }
 }

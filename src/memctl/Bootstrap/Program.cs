@@ -97,7 +97,7 @@ initCmd.SetHandler(ctx =>
     var g = G(ctx);
     if (RequireVaultExplicit(g, ctx) is not { } vault) return;
     vaultReader.InitVaultStructure(vault);
-    ResultPrinter.Print(MemctlOutcome.Ok("init", $"Vault initialized at {vault}", new { vault }));
+    ResultPrinter.Print(MemctlOutcome.Ok("init", $"Vault initialized at {vault}", new VaultRef(vault)));
 });
 root.AddCommand(initCmd);
 
