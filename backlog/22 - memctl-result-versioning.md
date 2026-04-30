@@ -2,7 +2,7 @@
 id: 22
 type: task
 title: MemctlResult versioning — lock v1 schema, breaking change qua v2
-status: In Progress
+status: Done
 priority: low
 tags:
 - api-contract
@@ -77,3 +77,7 @@ DTO con (NoteDto, SearchResultDto, ...) cũng có thể có `schema_version` fie
 ## Effort
 
 ~3-4h (chỉ thêm field + doc; không thay logic).
+
+## Comments
+
+**2026-04-30 09:21 user:** Phase 6: merged. schema_version=1 + wire-format-v1.md doc.
