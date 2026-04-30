@@ -75,13 +75,18 @@ public static class MemctlResultMapper
 
     public static VaultStatusDto MapStatus(VaultStatus s) => new()
     {
-        ModelReady   = s.ModelReady,
-        ModelPath    = s.ModelPath,
-        ModelSizeMb  = s.ModelSizeMb,
-        VaultExists  = s.VaultExists,
-        VaultIndexed = s.VaultIndexed,
-        NoteCount    = s.NoteCount,
-        IndexPath    = s.IndexPath,
+        ModelReady     = s.ModelReady,
+        ModelPath      = s.ModelPath,
+        ModelSizeMb    = s.ModelSizeMb,
+        VaultExists    = s.VaultExists,
+        VaultIndexed   = s.VaultIndexed,
+        NoteCount      = s.NoteCount,
+        IndexPath      = s.IndexPath,
+        VaultFound     = s.VaultFound,
+        SearchPath     = s.SearchPath,
+        SearchStrategy = s.SearchStrategy,
+        CheckedPaths   = s.CheckedPaths?.ToArray(),
+        Hint           = s.Hint,
     };
 
     public static VaultRefDto MapVaultRef(VaultRef v) => new() { Vault = v.Vault };

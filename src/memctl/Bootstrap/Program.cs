@@ -369,8 +369,12 @@ root.AddCommand(orgCmd);
 var statusCmd = new Command("status", "Check model and vault readiness");
 statusCmd.SetHandler(ctx =>
 {
-    var g = G(ctx);
-    ResultPrinter.Print(new StatusOperator().Execute(g.Vault ?? ""));
+    var g        = G(ctx);
+    var resolved = VaultLocator.FindVault(g.Vault) ?? "";
+    ResultPrinter.Print(new StatusOperator().Execute(
+        vaultPath:     resolved,
+        explicitVault: g.Vault,
+        searchPath:    Directory.GetCurrentDirectory()));
 });
 root.AddCommand(statusCmd);
 

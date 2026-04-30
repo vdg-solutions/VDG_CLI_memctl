@@ -117,13 +117,18 @@ public sealed class DecayReportDto
 
 public sealed class VaultStatusDto
 {
-    [JsonPropertyName("model_ready")]   public bool   ModelReady   { get; init; }
-    [JsonPropertyName("model_path")]    public string ModelPath    { get; init; } = "";
-    [JsonPropertyName("model_size_mb")] public int    ModelSizeMb  { get; init; }
-    [JsonPropertyName("vault_exists")]  public bool   VaultExists  { get; init; }
-    [JsonPropertyName("vault_indexed")] public bool   VaultIndexed { get; init; }
-    [JsonPropertyName("note_count")]    public int    NoteCount    { get; init; }
-    [JsonPropertyName("index_path")]    public string IndexPath    { get; init; } = "";
+    [JsonPropertyName("model_ready")]     public bool      ModelReady     { get; init; }
+    [JsonPropertyName("model_path")]      public string    ModelPath      { get; init; } = "";
+    [JsonPropertyName("model_size_mb")]   public int       ModelSizeMb    { get; init; }
+    [JsonPropertyName("vault_exists")]    public bool      VaultExists    { get; init; }
+    [JsonPropertyName("vault_indexed")]   public bool      VaultIndexed   { get; init; }
+    [JsonPropertyName("note_count")]      public int       NoteCount      { get; init; }
+    [JsonPropertyName("index_path")]      public string    IndexPath      { get; init; } = "";
+    [JsonPropertyName("vault_found")]     public bool      VaultFound     { get; init; } = true;
+    [JsonPropertyName("search_path")]     public string?   SearchPath     { get; init; }
+    [JsonPropertyName("search_strategy")] public string?   SearchStrategy { get; init; }
+    [JsonPropertyName("checked_paths")]   public string[]? CheckedPaths   { get; init; }
+    [JsonPropertyName("hint")]            public string?   Hint           { get; init; }
 }
 
 public sealed class CaptureReportDto

@@ -1,14 +1,14 @@
 ---
 id: 18
 type: task
-title: 'Vault discovery debug — Claude Code biết tại sao vault auto-detect fail'
-status: Todo
+title: Vault discovery debug — Claude Code biết tại sao vault auto-detect fail
+status: In Progress
 priority: low
 tags:
-  - vault-locator
-  - plugin-ux
-  - claude-code
-  - dx
+- vault-locator
+- plugin-ux
+- claude-code
+- dx
 created: 2026-04-30
 updated: 2026-04-30
 ---
