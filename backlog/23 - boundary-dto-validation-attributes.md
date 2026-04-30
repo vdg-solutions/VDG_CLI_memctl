@@ -1,14 +1,14 @@
 ---
 id: 23
 type: task
-title: 'Boundary DTO validation attributes — input validation tại system edge'
-status: Todo
+title: Boundary DTO validation attributes — input validation tại system edge
+status: In Progress
 priority: low
 tags:
-  - boundary
-  - validation
-  - api-contract
-  - safety
+- boundary
+- validation
+- api-contract
+- safety
 created: 2026-04-30
 updated: 2026-04-30
 ---
