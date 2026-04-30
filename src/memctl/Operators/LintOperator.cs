@@ -1,6 +1,8 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using Memctl.Boundary;
+using Memctl.Boundary.Llm;
 using Memctl.CoreAbstractions.Entities;
 using Memctl.CoreAbstractions.Ports;
 
@@ -225,15 +227,15 @@ public sealed class LintOperator(IVaultReader vaultReader, INoteIndex index)
                 {{notesText}}
                 """;
 
-            var request = new
+            var request = new OpenAiChatRequest
             {
-                model          = opts.LlmModel,
-                messages       = new[] { new { role = "user", content = prompt } },
-                response_format = new { type = "json_object" },
-                max_tokens     = 1024,
+                Model          = opts.LlmModel ?? "",
+                Messages       = [new OpenAiChatMessage { Role = "user", Content = prompt }],
+                ResponseFormat = new OpenAiResponseFormat { Type = "json_object" },
+                MaxTokens      = 1024,
             };
 
-            var jsonBody = JsonSerializer.Serialize(request, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower });
+            var jsonBody = JsonSerializer.Serialize(request, OpenAiJsonContext.Default.OpenAiChatRequest);
             using var req = new HttpRequestMessage(HttpMethod.Post, "chat/completions")
             {
                 Content = new StringContent(jsonBody, Encoding.UTF8, "application/json"),

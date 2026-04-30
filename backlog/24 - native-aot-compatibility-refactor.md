@@ -1,15 +1,15 @@
 ---
 id: 24
 type: task
-title: 'Native AOT compatibility refactor — JsonSerializerContext, YamlDotNet static, manual validation'
-status: Todo
+title: Native AOT compatibility refactor — JsonSerializerContext, YamlDotNet static, manual validation
+status: In Progress
 priority: high
 tags:
-  - aot
-  - hardening
-  - anti-reverse-engineer
-  - performance
-  - architecture
+- aot
+- hardening
+- anti-reverse-engineer
+- performance
+- architecture
 created: 2026-04-30
 updated: 2026-04-30
 ---
@@ -242,3 +242,7 @@ Test project hiện tại dùng xUnit reflection. Tests **không cần** AOT —
 
 - Em đã trial AOT publish trên main pre-task, gặp đúng 2 blocker categories (linker + IL2026/IL3050). Tasks này địa chỉ cả hai.
 - Nếu ONNX Runtime AOT fails → fallback strategy: ship 2 build flavors (AOT-stripped JIT-only, full AOT) per platform. Document trade-off cho user.
+
+## Comments
+
+**2026-04-30 19:39 user:** Phase 0: env probe pass. MSVC v14.50.35717 found. Starting /sdlc pipeline.
