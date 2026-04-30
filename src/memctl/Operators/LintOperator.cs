@@ -52,8 +52,8 @@ public sealed class LintOperator(IVaultReader vaultReader, INoteIndex index)
 
         if (notes.Count == 0)
         {
-            var emptyData = new { structural = EmptyStructural(), semantic = (object?)null };
-            return (MemctlOutcome.Ok("lint", "Lint complete: 0 notes, 0 issues", emptyData), 0);
+            return (MemctlOutcome.Ok("lint", "Lint complete: 0 notes, 0 issues",
+                new LintReport(EmptyStructural(), null)), 0);
         }
 
         var structural = RunStructural(notes);
@@ -91,13 +91,13 @@ public sealed class LintOperator(IVaultReader vaultReader, INoteIndex index)
             }
         }
 
-        var data = new { structural, semantic = semanticResult };
-        return (MemctlOutcome.Ok("lint", BuildMessage(notes.Count, structural), data), exitCode);
+        return (MemctlOutcome.Ok("lint", BuildMessage(notes.Count, structural),
+            new LintReport(structural, semanticResult)), exitCode);
     }
 
     // --- structural ---
 
-    private static object RunStructural(IReadOnlyList<Note> notes)
+    private static LintStructural RunStructural(IReadOnlyList<Note> notes)
     {
         var titleToId = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var n in notes)
@@ -118,32 +118,32 @@ public sealed class LintOperator(IVaultReader vaultReader, INoteIndex index)
         var duplicates   = FindDuplicates(notes);
         var decayRisk    = FindDecayRisk(notes, inboundCounts);
 
-        return new { orphans, broken_links = brokenLinks, duplicates, decay_risk = decayRisk };
+        return new LintStructural(orphans, brokenLinks, duplicates, decayRisk);
     }
 
-    private static object EmptyStructural() =>
-        new { orphans = Array.Empty<object>(), broken_links = Array.Empty<object>(), duplicates = Array.Empty<object>(), decay_risk = Array.Empty<object>() };
+    private static LintStructural EmptyStructural() =>
+        new([], [], [], []);
 
-    private static List<object> FindOrphans(IReadOnlyList<Note> notes, Dictionary<string, int> inboundCounts) =>
+    private static List<LintOrphan> FindOrphans(IReadOnlyList<Note> notes, Dictionary<string, int> inboundCounts) =>
         notes
             .Where(n => !inboundCounts.ContainsKey(n.Id))
-            .Select(n => (object)new { id = n.Id, title = n.Title, file_path = n.FilePath })
+            .Select(n => new LintOrphan(n.Id, n.Title, n.FilePath))
             .ToList();
 
-    private static List<object> FindBrokenLinks(IReadOnlyList<Note> notes, Dictionary<string, string> titleToId)
+    private static List<LintBrokenLink> FindBrokenLinks(IReadOnlyList<Note> notes, Dictionary<string, string> titleToId)
     {
-        var broken = new List<object>();
+        var broken = new List<LintBrokenLink>();
         foreach (var note in notes)
             foreach (var link in note.Links)
                 if (!titleToId.ContainsKey(link))
-                    broken.Add(new { note_id = note.Id, note_title = note.Title, broken_link = link });
+                    broken.Add(new LintBrokenLink(note.Id, note.Title, link));
         return broken;
     }
 
-    private static List<object> FindDuplicates(IReadOnlyList<Note> notes)
+    private static List<LintDuplicate> FindDuplicates(IReadOnlyList<Note> notes)
     {
         var embedded = notes.Where(n => n.Embedding is not null).ToList();
-        var dupes = new List<object>();
+        var dupes = new List<LintDuplicate>();
 
         for (var i = 0; i < embedded.Count; i++)
         for (var j = i + 1; j < embedded.Count; j++)
@@ -151,28 +151,20 @@ public sealed class LintOperator(IVaultReader vaultReader, INoteIndex index)
             var sim = CosineSim(embedded[i].Embedding!, embedded[j].Embedding!);
             if (sim > DuplicateSimThreshold)
             {
-                // deterministic ordering
                 var (a, b) = string.Compare(embedded[i].Id, embedded[j].Id, StringComparison.Ordinal) < 0
                     ? (embedded[i], embedded[j])
                     : (embedded[j], embedded[i]);
 
-                dupes.Add(new
-                {
-                    note_a_id    = a.Id,
-                    note_a_title = a.Title,
-                    note_b_id    = b.Id,
-                    note_b_title = b.Title,
-                    similarity   = Math.Round(sim, 4),
-                });
+                dupes.Add(new LintDuplicate(a.Id, a.Title, b.Id, b.Title, Math.Round(sim, 4)));
             }
         }
         return dupes;
     }
 
-    private static List<object> FindDecayRisk(IReadOnlyList<Note> notes, Dictionary<string, int> inboundCounts)
+    private static List<LintDecayRisk> FindDecayRisk(IReadOnlyList<Note> notes, Dictionary<string, int> inboundCounts)
     {
         var now  = DateTime.UtcNow;
-        var risk = new List<object>();
+        var risk = new List<LintDecayRisk>();
 
         foreach (var note in notes)
         {
@@ -183,14 +175,7 @@ public sealed class LintOperator(IVaultReader vaultReader, INoteIndex index)
             var daysSince = (now - note.Modified).TotalDays;
             if (daysSince <= DecayRiskDaysThreshold) continue;
 
-            risk.Add(new
-            {
-                id                  = note.Id,
-                title               = note.Title,
-                weight              = note.Weight,
-                days_since_modified = (int)daysSince,
-                inbound_link_count  = inbound,
-            });
+            risk.Add(new LintDecayRisk(note.Id, note.Title, note.Weight, (int)daysSince, inbound));
         }
         return risk;
     }
@@ -334,7 +319,7 @@ public sealed class LintOperator(IVaultReader vaultReader, INoteIndex index)
 
     // --- save ---
 
-    private void SaveReport(object structural, string vaultPath)
+    private void SaveReport(LintStructural structural, string vaultPath)
     {
         var dateStr = DateTime.UtcNow.ToString("yyyy-MM-dd");
         var content = FormatMarkdown(structural, null);
@@ -355,18 +340,13 @@ public sealed class LintOperator(IVaultReader vaultReader, INoteIndex index)
 
     // --- formatting ---
 
-    private static string FormatMarkdown(object structural, object? semantic)
+    private static string FormatMarkdown(LintStructural structural, object? semantic)
     {
-        // serialize structural to JsonElement for iteration
-        var json = JsonSerializer.Serialize(structural);
-        using var doc  = JsonDocument.Parse(json);
-        var root = doc.RootElement;
-
-        var orphans     = CountArray(root, "orphans");
-        var broken      = CountArray(root, "broken_links");
-        var dupes       = CountArray(root, "duplicates");
-        var decay       = CountArray(root, "decay_risk");
-        var total       = orphans + broken + dupes + decay;
+        var orphans = structural.Orphans.Count;
+        var broken  = structural.BrokenLinks.Count;
+        var dupes   = structural.Duplicates.Count;
+        var decay   = structural.DecayRisk.Count;
+        var total   = orphans + broken + dupes + decay;
 
         var sb = new StringBuilder();
         sb.AppendLine($"# Vault Lint Report — {DateTime.UtcNow:yyyy-MM-dd}");
@@ -377,23 +357,23 @@ public sealed class LintOperator(IVaultReader vaultReader, INoteIndex index)
         sb.AppendLine();
 
         sb.AppendLine($"## Orphan Notes ({orphans})");
-        foreach (var item in root.GetProperty("orphans").EnumerateArray())
-            sb.AppendLine($"- [{item.GetProperty("title").GetString()}]({item.GetProperty("file_path").GetString()})");
+        foreach (var o in structural.Orphans)
+            sb.AppendLine($"- [{o.Title}]({o.FilePath})");
         sb.AppendLine();
 
         sb.AppendLine($"## Broken Links ({broken})");
-        foreach (var item in root.GetProperty("broken_links").EnumerateArray())
-            sb.AppendLine($"- **{item.GetProperty("note_title").GetString()}**: `[[{item.GetProperty("broken_link").GetString()}]]`");
+        foreach (var b in structural.BrokenLinks)
+            sb.AppendLine($"- **{b.NoteTitle}**: `[[{b.BrokenLink}]]`");
         sb.AppendLine();
 
         sb.AppendLine($"## Duplicate Candidates ({dupes})");
-        foreach (var item in root.GetProperty("duplicates").EnumerateArray())
-            sb.AppendLine($"- [{item.GetProperty("note_a_title").GetString()}] ↔ [{item.GetProperty("note_b_title").GetString()}] (similarity: {item.GetProperty("similarity").GetDouble():F4})");
+        foreach (var d in structural.Duplicates)
+            sb.AppendLine($"- [{d.NoteATitle}] ↔ [{d.NoteBTitle}] (similarity: {d.Similarity:F4})");
         sb.AppendLine();
 
         sb.AppendLine($"## Decay Risk ({decay})");
-        foreach (var item in root.GetProperty("decay_risk").EnumerateArray())
-            sb.AppendLine($"- [{item.GetProperty("title").GetString()}]({item.GetProperty("id").GetString()}) — weight: {item.GetProperty("weight").GetDouble():F2}, days inactive: {item.GetProperty("days_since_modified").GetInt32()}, inbound links: {item.GetProperty("inbound_link_count").GetInt32()}");
+        foreach (var r in structural.DecayRisk)
+            sb.AppendLine($"- [{r.Title}]({r.Id}) — weight: {r.Weight:F2}, days inactive: {r.DaysSinceModified}, inbound links: {r.InboundLinkCount}");
 
         if (semantic is not null)
         {
@@ -405,18 +385,10 @@ public sealed class LintOperator(IVaultReader vaultReader, INoteIndex index)
         return sb.ToString();
     }
 
-    private static int CountArray(JsonElement root, string key) =>
-        root.TryGetProperty(key, out var el) && el.ValueKind == JsonValueKind.Array
-            ? el.GetArrayLength()
-            : 0;
-
-    private static string BuildMessage(int noteCount, object structural)
+    private static string BuildMessage(int noteCount, LintStructural structural)
     {
-        var json = JsonSerializer.Serialize(structural);
-        using var doc = JsonDocument.Parse(json);
-        var root = doc.RootElement;
-        var total = CountArray(root, "orphans") + CountArray(root, "broken_links")
-                  + CountArray(root, "duplicates") + CountArray(root, "decay_risk");
+        var total = structural.Orphans.Count + structural.BrokenLinks.Count
+                  + structural.Duplicates.Count + structural.DecayRisk.Count;
         return $"Lint complete: {noteCount} notes, {total} issues";
     }
 }

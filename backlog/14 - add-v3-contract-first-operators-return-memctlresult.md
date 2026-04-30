@@ -2,13 +2,13 @@
 id: 14
 type: task
 title: 'A.D.D V3 Contract First: Operators trả MemctlResult (Boundary DTO) thay MemctlOutcome anonymous'
-status: Todo
+status: In Progress
 priority: high
 tags:
-  - architecture
-  - refactor
-  - a.d.d-v3
-  - contract-first
+- architecture
+- refactor
+- a.d.d-v3
+- contract-first
 created: 2026-04-30
 updated: 2026-04-30
 ---
@@ -142,3 +142,11 @@ Constraint dependency rules A.D.D:
 - Bug autopilot skill (`memctl append` không tồn tại trên CLI) đã fix riêng — không phụ thuộc task này.
 - Telegram leftover (`add-turn`, hardcode `telegram` tag) đã dọn — không phụ thuộc task này.
 - Phát hiện task này từ audit ngày 2026-04-30: bot autopilot báo `memctl append` không tồn tại → phát hiện CLI/MCP drift → audit tổng → phát hiện vi phạm Contract First.
+
+## Comments
+
+**2026-04-30 08:35 user:** Phase 0: Initialized. Branch feature/14-add-v3-contract-first-operators-return-memctlresult.
+
+**2026-04-30 08:39 user:** Phase 1 complete: Spec at docs/specs/14-spec.md (38 FR + 7 NFR, backward compat via snapshot baseline)
+
+**2026-04-30 08:43 user:** Phase 2 complete: Design at docs/designs/14-design.md. Mapper=switch expression. Search carriers=dedicated records. 14-step impl order with snapshot baseline first.

@@ -7,17 +7,11 @@ public sealed class ModelListOperator
 {
     public MemctlOutcome Execute()
     {
-        var models = MemctlConfig.ListModels()
-            .Select(m => new
-            {
-                name       = m.Name,
-                ready      = m.Ready,
-                size_mb    = m.SizeMb,
-                is_default = m.IsDefault,
-            })
+        var entries = MemctlConfig.ListModels()
+            .Select(m => new ModelEntry(m.Name, m.Ready, m.SizeMb, m.IsDefault))
             .ToList();
 
-        return MemctlOutcome.Ok("model-list", $"{models.Count} model(s)",
-            new { default_model = MemctlConfig.Load().DefaultModel, models });
+        return MemctlOutcome.Ok("model-list", $"{entries.Count} model(s)",
+            new ModelList(MemctlConfig.Load().DefaultModel, entries));
     }
 }

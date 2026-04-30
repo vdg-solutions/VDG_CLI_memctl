@@ -36,8 +36,7 @@ public sealed class VaultWriteOperator(IVaultReader vaultReader, INoteIndex inde
         vaultReader.WriteNote(stored, vaultPath, relativeFile);
         index.Upsert(stored);
 
-        return MemctlOutcome.Ok("create", $"Created note: {note.Title}",
-            new { id = note.Id, file = relativeFile, title = note.Title });
+        return MemctlOutcome.Ok("create", $"Created note: {note.Title}", stored);
     }
 
     public MemctlOutcome ExecuteUpdate(string vaultPath, string id, string content)
@@ -57,8 +56,7 @@ public sealed class VaultWriteOperator(IVaultReader vaultReader, INoteIndex inde
         vaultReader.WriteNote(stored, vaultPath, existing.FilePath);
         index.Upsert(stored);
 
-        return MemctlOutcome.Ok("update", $"Updated note: {updated.Title}",
-            new { id = updated.Id, file = updated.FilePath, title = updated.Title });
+        return MemctlOutcome.Ok("update", $"Updated note: {updated.Title}", stored);
     }
 
     public MemctlOutcome ExecuteAppend(string vaultPath, string id, string content)
@@ -80,8 +78,7 @@ public sealed class VaultWriteOperator(IVaultReader vaultReader, INoteIndex inde
         vaultReader.WriteNote(stored, vaultPath, existing.FilePath);
         index.Upsert(stored);
 
-        return MemctlOutcome.Ok("append", $"Appended to: {appended.Title}",
-            new { id = appended.Id, file = appended.FilePath, title = appended.Title });
+        return MemctlOutcome.Ok("append", $"Appended to: {appended.Title}", stored);
     }
 
     public MemctlOutcome ExecuteDelete(string vaultPath, string id)
@@ -103,8 +100,7 @@ public sealed class VaultWriteOperator(IVaultReader vaultReader, INoteIndex inde
 
         index.Delete(existing.Id);
 
-        return MemctlOutcome.Ok("delete", $"Deleted note: {existing.Title}",
-            new { id = existing.Id, file = existing.FilePath, title = existing.Title });
+        return MemctlOutcome.Ok("delete", $"Deleted note: {existing.Title}", existing);
     }
 
     private static bool IsPathSafe(string vaultPath, string absoluteResolved)

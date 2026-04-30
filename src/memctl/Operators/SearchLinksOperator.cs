@@ -18,12 +18,7 @@ public sealed class SearchLinksOperator(IVaultReader vaultReader, INoteIndex ind
 
         var linked = index.GetLinked(source.Id, depth);
 
-        return MemctlOutcome.Ok("search-links", $"{linked.Count} linked notes", new
-        {
-            source_id = source.Id,
-            depth,
-            count   = linked.Count,
-            results = linked.Select(n => GetOperator.NoteToData(n)),
-        });
+        return MemctlOutcome.Ok("search-links", $"{linked.Count} linked notes",
+            new SearchLinksHitsResult(source.Id, depth, linked));
     }
 }

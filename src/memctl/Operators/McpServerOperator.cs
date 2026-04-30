@@ -3,6 +3,7 @@ using Memctl.CoreAbstractions.Entities;
 using Memctl.CoreAbstractions.Ports;
 using Memctl.Implementations.Config;
 using Memctl.Implementations.Embedding;
+using Memctl.Operators.Mapping;
 
 namespace Memctl.Operators;
 
@@ -276,7 +277,7 @@ public sealed class McpServerOperator(
         if (note is null)
             return MemctlOutcome.Ok("get_identity", "Identity note not found (may have been deleted)", null);
         index.IncrementAccess(note.Id);
-        return MemctlOutcome.Ok("get_identity", "Identity note", GetOperator.NoteToData(note));
+        return MemctlOutcome.Ok("get_identity", "Identity note", note);
     }
 
     private const string SessionProtocol = """
@@ -329,13 +330,7 @@ Before ending session:
 
     private static object ToolResult(object id, MemctlOutcome outcome)
     {
-        var text = JsonSerializer.Serialize(new
-        {
-            success = outcome.Success,
-            action  = outcome.Action,
-            message = outcome.Message,
-            data    = outcome.Data,
-        });
+        var text = JsonSerializer.Serialize(MemctlResultMapper.ToResult(outcome));
         return new
         {
             jsonrpc = "2.0",
@@ -446,8 +441,9 @@ Before ending session:
         if (note is null) return MemctlOutcome.Fail("set_weight", $"Note not found: {id}");
         var clamped = Math.Clamp(weight, 0f, 1f);
         index.SetWeight(note.Id, clamped);
-        return MemctlOutcome.Ok("set_weight", $"Weight set to {(float)Math.Round(clamped, 2)}",
-            new { id = note.Id, file = note.FilePath, weight = (float)Math.Round(clamped, 2) });
+        var rounded = (float)Math.Round(clamped, 2);
+        return MemctlOutcome.Ok("set_weight", $"Weight set to {rounded}",
+            new WeightChange(note.Id, note.FilePath, rounded));
     }
 
     private MemctlOutcome CallDelete(JsonElement args)

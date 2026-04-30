@@ -9,7 +9,7 @@ public sealed class ModelDownloadOperator
     {
         if (StatusOperator.IsModelReady(out var modelPath, out var modelMb))
             return MemctlOutcome.Ok("model-download", "Model already present",
-                new { model_path = modelPath, model_size_mb = modelMb });
+                new ModelInfo(modelPath, modelMb));
 
         try
         {
@@ -18,7 +18,7 @@ public sealed class ModelDownloadOperator
             StatusOperator.IsModelReady(out modelPath, out modelMb);
 
             return MemctlOutcome.Ok("model-download", "Model downloaded",
-                new { model_path = modelPath, model_size_mb = modelMb });
+                new ModelInfo(modelPath, modelMb));
         }
         catch (Exception ex)
         {

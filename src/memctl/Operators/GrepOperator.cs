@@ -17,7 +17,7 @@ public sealed class GrepOperator
             catch (Exception ex) { return MemctlOutcome.Fail("grep", $"Invalid regex: {ex.Message}"); }
         }
 
-        var hits  = new List<object>();
+        var hits  = new List<GrepHit>();
         var files = Directory.EnumerateFiles(vaultPath, "*.md", SearchOption.AllDirectories)
             .Where(f => !f.Contains(Path.DirectorySeparatorChar + ".obsidian" + Path.DirectorySeparatorChar)
                      && !f.Contains(Path.DirectorySeparatorChar + ".memctl" + Path.DirectorySeparatorChar));
@@ -35,11 +35,10 @@ public sealed class GrepOperator
                     : lines[i].Contains(pattern, StringComparison.OrdinalIgnoreCase);
 
                 if (matched)
-                    hits.Add(new { file = relative, line = i + 1, content = lines[i].Trim() });
+                    hits.Add(new GrepHit(relative, i + 1, lines[i].Trim()));
             }
         }
 
-        return MemctlOutcome.Ok("grep", $"{hits.Count} matches",
-            new { pattern, count = hits.Count, hits });
+        return MemctlOutcome.Ok("grep", $"{hits.Count} matches", new GrepResult(pattern, hits));
     }
 }

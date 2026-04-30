@@ -19,21 +19,6 @@ public sealed class GetOperator(IVaultReader vaultReader, INoteIndex index)
             return MemctlOutcome.Fail("get", $"Note not found: {idOrPath}");
 
         index.IncrementAccess(note.Id);
-        return MemctlOutcome.Ok("get", "Note found", NoteToData(note));
+        return MemctlOutcome.Ok("get", "Note found", note);
     }
-
-    internal static object NoteToData(Note n, float? score = null) => new
-    {
-        id           = n.Id,
-        file         = n.FilePath,
-        title        = n.Title,
-        content      = n.Content,
-        tags         = n.Tags,
-        links        = n.Links,
-        created      = n.Created.ToString("O"),
-        modified     = n.Modified.ToString("O"),
-        weight       = (float)Math.Round(n.Weight, 2),
-        access_count = n.AccessCount,
-        score,
-    };
 }

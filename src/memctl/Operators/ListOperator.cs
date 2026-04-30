@@ -16,7 +16,6 @@ public sealed class ListOperator(IVaultReader vaultReader, INoteIndex index)
             ? index.SearchByTags([tag], matchAll: false, limit)
             : index.GetAll(includeArchived).Take(limit).ToList();
 
-        return MemctlOutcome.Ok("list", $"{notes.Count} notes",
-            new { count = notes.Count, notes = notes.Select(n => GetOperator.NoteToData(n)) });
+        return MemctlOutcome.Ok("list", $"{notes.Count} notes", (IReadOnlyList<Note>)notes);
     }
 }

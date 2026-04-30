@@ -50,6 +50,6 @@ public sealed class OrganizeOperator(IVaultReader vault, INoteIndex index, ILlmC
         }
 
         return MemctlOutcome.Ok("organize", $"Organized {updated} notes",
-            new { updated, errors, vault = vaultPath });
+            new OrganizeReport(updated, errors, vaultPath));
     }
 }

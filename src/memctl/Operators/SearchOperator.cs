@@ -43,12 +43,8 @@ public sealed class SearchOperator(IVaultReader vaultReader, INoteIndex index, G
             })
             .ToList();
 
-        return MemctlOutcome.Ok("search", $"{results.Count} results", new
-        {
-            query,
-            count   = results.Count,
-            results = results.Select(h => GetOperator.NoteToData(h.Note, h.Score)),
-        });
+        return MemctlOutcome.Ok("search", $"{results.Count} results",
+            new SearchHitsResult(query, results));
     }
 
     private static void AddRrfScores(Dictionary<string, float> scores, IReadOnlyList<SearchHit> hits, float weight)

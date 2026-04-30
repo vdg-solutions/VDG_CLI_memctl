@@ -13,12 +13,7 @@ public sealed class SearchDateOperator(IVaultReader vaultReader, INoteIndex inde
         index.Initialize(IngestOperator.DbPath(vaultPath));
         var notes = index.SearchByDate(from, to, limit);
 
-        return MemctlOutcome.Ok("search-date", $"{notes.Count} results", new
-        {
-            from    = from?.ToString("O"),
-            to      = to?.ToString("O"),
-            count   = notes.Count,
-            results = notes.Select(n => GetOperator.NoteToData(n)),
-        });
+        return MemctlOutcome.Ok("search-date", $"{notes.Count} results",
+            new SearchDateHitsResult(from?.ToString("O"), to?.ToString("O"), notes));
     }
 }

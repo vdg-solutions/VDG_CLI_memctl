@@ -19,11 +19,7 @@ public sealed class SearchSemanticOperator(IVaultReader vaultReader, INoteIndex 
         var qEmb = embedding.Embed(query);
         var hits = index.SearchSemantic(qEmb, limit, scopeIds, folderPrefix);
 
-        return MemctlOutcome.Ok("search-semantic", $"{hits.Count} results", new
-        {
-            query,
-            count   = hits.Count,
-            results = hits.Select(h => GetOperator.NoteToData(h.Note, h.Score)),
-        });
+        return MemctlOutcome.Ok("search-semantic", $"{hits.Count} results",
+            new SearchHitsResult(query, hits));
     }
 }
