@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.CommandLine.Invocation;
 using Memctl.Bootstrap;
+using Memctl.Boundary;
 using Memctl.Boundary.Options;
 using Memctl.Boundary.Requests;
 using Memctl.CoreAbstractions.Entities;
@@ -621,7 +622,6 @@ var capTextOpt    = new Option<string?>("--text",       "Turn content — direct
 var capSessionOpt = new Option<string?>("--session-id", "Session ID override");
 var capDryRunOpt  = new Option<bool>   ("--dry-run",    "Print what would be saved; no disk write");
 var captureCmd     = new Command("capture", "Auto-capture conversation turns (Hook Protocol v1)");
-var captureJsonOpts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
 captureCmd.AddOption(capRoleOpt);
 captureCmd.AddOption(capTextOpt);
 captureCmd.AddOption(capSessionOpt);
@@ -668,7 +668,7 @@ captureCmd.SetHandler(async ctx =>
         catch { ctx.ExitCode = 0; return; }
 
         CapturePayload? payload;
-        try   { payload = JsonSerializer.Deserialize<CapturePayload>(stdinText, captureJsonOpts); }
+        try   { payload = JsonSerializer.Deserialize(stdinText, MemctlJsonContext.Default.CapturePayload); }
         catch { ctx.ExitCode = 0; return; }
 
         if (payload is null) { ctx.ExitCode = 0; return; }
@@ -788,15 +788,4 @@ static (List<string> exact, List<string> prefix) ParseRemoveArg(string? raw)
     }
     return (exact, prefix);
 }
-
-// Hook Protocol v1 payload DTOs
-internal sealed record CapturePayload(
-    [property: JsonPropertyName("session_id")] string?           SessionId,
-    [property: JsonPropertyName("cwd")]        string?           Cwd,
-    [property: JsonPropertyName("transcript")] TranscriptTurn[]? Transcript);
-
-internal sealed record TranscriptTurn(
-    [property: JsonPropertyName("role")]    string Role,
-    [property: JsonPropertyName("content")] string Content);
-
 

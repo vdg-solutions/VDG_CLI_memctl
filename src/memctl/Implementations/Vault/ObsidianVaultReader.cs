@@ -3,8 +3,6 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Memctl.CoreAbstractions.Entities;
 using Memctl.CoreAbstractions.Ports;
-using YamlDotNet.Serialization;
-using YamlDotNet.Serialization.NamingConventions;
 
 namespace Memctl.Implementations.Vault;
 
@@ -13,11 +11,6 @@ public sealed class ObsidianVaultReader : IVaultReader
     private static readonly Regex WikiLinkPattern = new(@"\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]", RegexOptions.Compiled);
     private static readonly Regex TagPattern      = new(@"(?:^|\s)#([\w/-]+)", RegexOptions.Compiled | RegexOptions.Multiline);
     private static readonly Regex FrontmatterPattern = new(@"^---\r?\n(.*?)\r?\n---\r?\n?", RegexOptions.Singleline | RegexOptions.Compiled);
-
-    private static readonly IDeserializer YamlDeserializer = new DeserializerBuilder()
-        .WithNamingConvention(UnderscoredNamingConvention.Instance)
-        .IgnoreUnmatchedProperties()
-        .Build();
 
     public IEnumerable<string> EnumerateMarkdownFiles(string vaultPath) =>
         Directory.EnumerateFiles(vaultPath, "*.md", SearchOption.AllDirectories)
@@ -172,12 +165,11 @@ public sealed class ObsidianVaultReader : IVaultReader
 
         try
         {
-            var fm = YamlDeserializer.Deserialize<Dictionary<string, object?>>(match.Groups[1].Value) ?? [];
+            var fm = FrontmatterParser.Parse(match.Groups[1].Value);
             return (fm, raw[match.Length..].TrimStart('\r', '\n'));
         }
         catch
         {
-            /* malformed frontmatter — treat as body */
             return ([], raw);
         }
     }
@@ -197,9 +189,9 @@ public sealed class ObsidianVaultReader : IVaultReader
     {
         var tags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        if (fm.TryGetValue("tags", out var fmTags) && fmTags is IEnumerable<object> list)
-            foreach (var t in list)
-                tags.Add(t.ToString()!.TrimStart('#'));
+        if (fm.TryGetValue("tags", out var fmTags))
+            foreach (var t in CoerceList(fmTags))
+                tags.Add(t.TrimStart('#'));
 
         foreach (Match m in TagPattern.Matches(body))
             tags.Add(m.Groups[1].Value);
@@ -211,10 +203,9 @@ public sealed class ObsidianVaultReader : IVaultReader
     {
         var links = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        if (fm.TryGetValue("links", out var fmLinks) && fmLinks is IEnumerable<object> list)
-            foreach (var l in list)
+        if (fm.TryGetValue("links", out var fmLinks))
+            foreach (var s in CoerceList(fmLinks))
             {
-                var s = l.ToString()!;
                 var inner = WikiLinkPattern.Match(s);
                 links.Add(inner.Success ? inner.Groups[1].Value.Trim() : s.Trim('[', ']'));
             }
@@ -224,6 +215,14 @@ public sealed class ObsidianVaultReader : IVaultReader
 
         return [.. links];
     }
+
+    private static IEnumerable<string> CoerceList(object? raw) => raw switch
+    {
+        string[] arr             => arr,
+        IEnumerable<object> objs => objs.Select(o => o?.ToString() ?? "").Where(s => s.Length > 0),
+        string s                 => [s],
+        _                        => [],
+    };
 
     private static DateTime ParseDate(Dictionary<string, object?> fm, string key, DateTime fallback)
     {

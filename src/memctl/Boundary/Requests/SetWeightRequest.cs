@@ -1,15 +1,18 @@
-using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 
 namespace Memctl.Boundary.Requests;
 
 public sealed class SetWeightRequest
 {
-    [JsonPropertyName("id")]
-    [Required, StringLength(256, MinimumLength = 1)]
-    public string Id { get; init; } = "";
+    [JsonPropertyName("id")]     public string Id     { get; init; } = "";
+    [JsonPropertyName("weight")] public float  Weight { get; init; }
 
-    [JsonPropertyName("weight")]
-    [Range(0.0, 2.0, ErrorMessage = "Weight must be in [0.0, 2.0]")]
-    public float Weight { get; init; }
+    public IReadOnlyList<string> Validate()
+    {
+        var errs = new List<string>();
+        if (string.IsNullOrWhiteSpace(Id))   errs.Add("id: required");
+        else if (Id.Length > 256)            errs.Add("id: max 256 chars");
+        if (Weight is < 0.0f or > 2.0f)      errs.Add("weight: must be in [0.0, 2.0]");
+        return errs;
+    }
 }

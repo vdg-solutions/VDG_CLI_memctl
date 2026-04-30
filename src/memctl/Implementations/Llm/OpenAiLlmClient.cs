@@ -1,7 +1,8 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
+using Memctl.Boundary;
+using Memctl.Boundary.Llm;
 using Memctl.CoreAbstractions.Entities;
 using Memctl.CoreAbstractions.Ports;
 
@@ -9,8 +10,6 @@ namespace Memctl.Implementations.Llm;
 
 public sealed class OpenAiLlmClient : ILlmClient
 {
-    private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
-
     private readonly HttpClient _http;
     private readonly string     _model;
 
@@ -45,15 +44,15 @@ public sealed class OpenAiLlmClient : ILlmClient
             {content[..Math.Min(content.Length, 2000)]}
             """;
 
-        var request = new
+        var request = new OpenAiChatRequest
         {
-            model = _model,
-            messages = new[] { new { role = "user", content = prompt } },
-            response_format = new { type = "json_object" },
-            max_tokens = 512,
+            Model          = _model,
+            Messages       = [new OpenAiChatMessage { Role = "user", Content = prompt }],
+            ResponseFormat = new OpenAiResponseFormat { Type = "json_object" },
+            MaxTokens      = 512,
         };
 
-        var json = JsonSerializer.Serialize(request, JsonOpts);
+        var json = JsonSerializer.Serialize(request, OpenAiJsonContext.Default.OpenAiChatRequest);
         using var httpReq = new HttpRequestMessage(HttpMethod.Post, "chat/completions")
         {
             Content = new StringContent(json, Encoding.UTF8, "application/json")

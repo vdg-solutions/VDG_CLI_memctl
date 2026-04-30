@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Memctl.Boundary;
+using Memctl.Boundary.Mcp;
 using Memctl.CoreAbstractions.Entities;
 using Memctl.CoreAbstractions.Ports;
 using Memctl.Implementations.Config;
@@ -20,12 +22,6 @@ public sealed class McpServerAdapter(
     string       vaultPath,
     string?      modelDir)
 {
-    private static readonly JsonSerializerOptions JsonOpts = new()
-    {
-        PropertyNamingPolicy   = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
-    };
-
     private GemmaEmbeddingEngine? _embedding;
 
     public async Task RunAsync(CancellationToken ct = default)
@@ -44,60 +40,56 @@ public sealed class McpServerAdapter(
             if (string.IsNullOrWhiteSpace(line)) continue;
 
             JsonElement msg;
-            try { msg = JsonSerializer.Deserialize<JsonElement>(line); }
+            try { msg = JsonSerializer.Deserialize(line, McpJsonContext.Default.JsonElement); }
             catch { continue; }
 
             var response = await RouteAsync(msg, ct).ConfigureAwait(false);
             if (response is null) continue;
 
-            await Console.Out.WriteLineAsync(JsonSerializer.Serialize(response, JsonOpts)).ConfigureAwait(false);
+            await Console.Out.WriteLineAsync(response).ConfigureAwait(false);
             await Console.Out.FlushAsync(ct).ConfigureAwait(false);
         }
     }
 
-    // --- routing ---
+    // --- routing — handlers serialize via source-gen context ---
 
-    private async Task<object?> RouteAsync(JsonElement msg, CancellationToken ct)
+    private async Task<string?> RouteAsync(JsonElement msg, CancellationToken ct)
     {
-        // notifications have no id — no response
         if (!msg.TryGetProperty("id", out var idEl)) return null;
 
-        var id     = ParseId(idEl);
         var method = msg.TryGetProperty("method", out var m) ? m.GetString() : null;
         var prms   = msg.TryGetProperty("params",  out var p) ? p : default;
 
         return method switch
         {
-            "initialize" => HandleInitialize(id),
-            "tools/list" => HandleToolsList(id),
-            "tools/call" => await HandleToolsCallAsync(id, prms, ct),
-            "ping"       => new { jsonrpc = "2.0", id, result = new { } },
-            _            => RpcError(id, -32601, "Method not found"),
+            "initialize" => HandleInitialize(idEl),
+            "tools/list" => HandleToolsList(idEl),
+            "tools/call" => await HandleToolsCallAsync(idEl, prms, ct),
+            "ping"       => JsonSerializer.Serialize(
+                new McpResponse<EmptyResult> { Id = idEl, Result = new EmptyResult() },
+                McpJsonContext.Default.McpResponseEmptyResult),
+            _            => RpcError(idEl, -32601, "Method not found"),
         };
     }
 
     // --- MCP protocol ---
 
-    private object HandleInitialize(object id) => new
+    private string HandleInitialize(JsonElement id)
     {
-        jsonrpc = "2.0",
-        id,
-        result  = new
+        var result = new InitializeResult
         {
-            protocolVersion = "2024-11-05",
-            capabilities    = new { tools = new { } },
-            serverInfo      = new { name = "memctl", version = "1.0.0", instructions = GetIdentityContent() },
-        },
-    };
+            ProtocolVersion = "2024-11-05",
+            Capabilities    = new ServerCapabilities { Tools = new ToolsCapability() },
+            ServerInfo      = new ServerInfo { Name = "memctl", Version = "1.0.0", Instructions = GetIdentityContent() ?? "" },
+        };
+        var resp = new McpResponse<InitializeResult> { Id = id, Result = result };
+        return JsonSerializer.Serialize(resp, McpJsonContext.Default.McpResponseInitializeResult);
+    }
 
-    private static object HandleToolsList(object id) => new
+    private static string HandleToolsList(JsonElement id)
     {
-        jsonrpc = "2.0",
-        id,
-        result = new
+        var tools = new ToolDef[]
         {
-            tools = new object[]
-            {
                 MakeTool("search",
                     "Hybrid semantic+BM25 search (RRF fusion). Use when query is general or you don't know exact terms.",
                     req: [("query",  "string",  "Search query text")],
@@ -199,11 +191,13 @@ public sealed class McpServerAdapter(
                     req: [],
                     opt: [],
                     dataDtoName: "HookStatusDto"),
-            },
-        },
-    };
+        };
 
-    private async Task<object> HandleToolsCallAsync(object id, JsonElement prms, CancellationToken ct)
+        var resp = new McpResponse<ToolsListResult> { Id = id, Result = new ToolsListResult { Tools = tools } };
+        return JsonSerializer.Serialize(resp, McpJsonContext.Default.McpResponseToolsListResult);
+    }
+
+    private async Task<string> HandleToolsCallAsync(JsonElement id, JsonElement prms, CancellationToken ct)
     {
         if (!prms.TryGetProperty("name", out var nameProp))
             return RpcError(id, -32602, "Missing 'name'");
@@ -380,93 +374,78 @@ Before ending session:
 
     // --- JSON-RPC / MCP response helpers ---
 
-    private static object RpcError(object id, int code, string message) => new
+    private static string RpcError(JsonElement id, int code, string message)
     {
-        jsonrpc = "2.0",
-        id,
-        error   = new { code, message },
-    };
-
-    private static object ToolResult(object id, MemctlOutcome outcome)
-    {
-        var text = JsonSerializer.Serialize(MemctlResultMapper.ToResult(outcome));
-        return new
-        {
-            jsonrpc = "2.0",
-            id,
-            result  = new
-            {
-                content = new[] { new { type = "text", text } },
-                isError = !outcome.Success,
-            },
-        };
+        var resp = new McpErrorResponse { Id = id, Error = new McpError { Code = code, Message = message } };
+        return JsonSerializer.Serialize(resp, McpJsonContext.Default.McpErrorResponse);
     }
 
-    private static object ToolResultError(object id, string message) => new
+    private static string ToolResult(JsonElement id, MemctlOutcome outcome)
     {
-        jsonrpc = "2.0",
-        id,
-        result  = new
+        var text = JsonSerializer.Serialize(MemctlResultMapper.ToResult(outcome), McpJsonContext.Default.MemctlResult);
+        var result = new ToolCallResult
         {
-            content = new[] { new { type = "text", text = message } },
-            isError = true,
-        },
-    };
+            Content = [new ToolContent { Type = "text", Text = text }],
+            IsError = !outcome.Success,
+        };
+        var resp = new McpResponse<ToolCallResult> { Id = id, Result = result };
+        return JsonSerializer.Serialize(resp, McpJsonContext.Default.McpResponseToolCallResult);
+    }
+
+    private static string ToolResultError(JsonElement id, string message)
+    {
+        var result = new ToolCallResult
+        {
+            Content = [new ToolContent { Type = "text", Text = message }],
+            IsError = true,
+        };
+        var resp = new McpResponse<ToolCallResult> { Id = id, Result = result };
+        return JsonSerializer.Serialize(resp, McpJsonContext.Default.McpResponseToolCallResult);
+    }
 
     // --- tool schema builder ---
 
-    private static object MakeTool(
+    private static ToolDef MakeTool(
         string name,
         string description,
         (string name, string type, string desc)[] req,
         (string name, string type, string desc)[] opt,
         string? dataDtoName = null)
     {
-        var props = new Dictionary<string, object>();
-        foreach (var (n, t, d) in req) props[n] = new { type = t, description = d };
-        foreach (var (n, t, d) in opt) props[n] = new { type = t, description = d };
-        return new
+        var props = new Dictionary<string, PropertySpec>();
+        foreach (var (n, t, d) in req) props[n] = new PropertySpec { Type = t, Description = d };
+        foreach (var (n, t, d) in opt) props[n] = new PropertySpec { Type = t, Description = d };
+        return new ToolDef
         {
-            name,
-            description,
-            inputSchema = new
+            Name        = name,
+            Description = description,
+            InputSchema = new InputSchema
             {
-                type       = "object",
-                properties = props,
-                required   = req.Select(r => r.name).ToArray(),
+                Type       = "object",
+                Properties = props,
+                Required   = req.Select(r => r.name).ToArray(),
             },
-            outputSchema = BuildOutputSchema(dataDtoName),
+            OutputSchema = BuildOutputSchema(dataDtoName),
         };
     }
 
-    private static object BuildOutputSchema(string? dataDtoName) => new
+    private static OutputSchema BuildOutputSchema(string? dataDtoName)
     {
-        type       = "object",
-        properties = new Dictionary<string, object>
+        var dataDesc = dataDtoName is null
+            ? "No payload"
+            : $"Boundary DTO: {dataDtoName} (see Boundary/MemctlResult.cs for full schema). Always typed; envelope keys (success/action/message/data) are stable.";
+        return new OutputSchema
         {
-            ["success"] = new { type = "boolean", description = "True if the operation succeeded" },
-            ["action"]  = new { type = "string",  description = "Echoed action name matching the tool" },
-            ["message"] = new { type = "string",  description = "Human-readable status message" },
-            ["data"]    = dataDtoName is null
-                ? (object)new { type = new[] { "object", "null" }, description = "No payload" }
-                : new
-                  {
-                      type        = new[] { "object", "null" },
-                      description = $"Boundary DTO: {dataDtoName} (see Boundary/MemctlResult.cs for full schema). " +
-                                    "Always typed; envelope keys (success/action/message/data) are stable.",
-                  },
-        },
-        required = new[] { "success", "action", "message" },
-    };
+            Type       = "object",
+            Required   = ["success", "action", "message"],
+            Properties = new OutputSchemaProperties
+            {
+                Data = new DataPropertySpec { Description = dataDesc },
+            },
+        };
+    }
 
     // --- parameter extraction helpers ---
-
-    private static object ParseId(JsonElement idEl) =>
-        idEl.ValueKind switch
-        {
-            JsonValueKind.Number => (object)idEl.GetInt64(),
-            _                    => idEl.GetString()!,
-        };
 
     private static string? Str(JsonElement args, string key) =>
         args.ValueKind != JsonValueKind.Undefined

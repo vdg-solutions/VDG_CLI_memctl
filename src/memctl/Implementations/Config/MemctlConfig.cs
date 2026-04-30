@@ -1,12 +1,11 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Memctl.Boundary;
 
 namespace Memctl.Implementations.Config;
 
 public sealed class MemctlConfig
 {
-    private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
-
     private static readonly string ConfigPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
         ".memctl", "config.json");
@@ -24,11 +23,10 @@ public sealed class MemctlConfig
         {
             if (!File.Exists(ConfigPath)) return new MemctlConfig();
             var json = File.ReadAllText(ConfigPath);
-            return JsonSerializer.Deserialize<MemctlConfig>(json) ?? new MemctlConfig();
+            return JsonSerializer.Deserialize(json, MemctlJsonContext.Default.MemctlConfig) ?? new MemctlConfig();
         }
         catch
         {
-            /* corrupted config — fall back to defaults */
             return new MemctlConfig();
         }
     }
@@ -36,7 +34,7 @@ public sealed class MemctlConfig
     public static void Save(MemctlConfig config)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath)!);
-        File.WriteAllText(ConfigPath, JsonSerializer.Serialize(config, JsonOpts));
+        File.WriteAllText(ConfigPath, JsonSerializer.Serialize(config, MemctlJsonContext.Default.MemctlConfig));
     }
 
     public static string ResolveModelDir(string? overrideDir)

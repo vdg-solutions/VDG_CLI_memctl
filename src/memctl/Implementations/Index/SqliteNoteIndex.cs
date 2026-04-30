@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using Memctl.Boundary;
 using Memctl.CoreAbstractions.Entities;
 using Memctl.CoreAbstractions.Ports;
 using Microsoft.Data.Sqlite;
@@ -21,8 +22,8 @@ public sealed class SqliteNoteIndex : INoteIndex
 
     public void Upsert(Note note)
     {
-        var tagsJson       = JsonSerializer.Serialize(note.Tags);
-        var linksJson      = JsonSerializer.Serialize(note.Links);
+        var tagsJson       = JsonSerializer.Serialize(note.Tags,  MemctlJsonContext.Default.StringArray);
+        var linksJson      = JsonSerializer.Serialize(note.Links, MemctlJsonContext.Default.StringArray);
         var embeddingBytes = EmbeddingToBytes(note.Embedding);
 
         // weight in INSERT (sets initial value) but excluded from UPDATE — preserve user-set values on re-ingest
@@ -383,8 +384,8 @@ public sealed class SqliteNoteIndex : INoteIndex
 
     private static Note ReadNote(SqliteDataReader r)
     {
-        var tags  = JsonSerializer.Deserialize<string[]>(r.GetString(r.GetOrdinal("tags")))  ?? [];
-        var links = JsonSerializer.Deserialize<string[]>(r.GetString(r.GetOrdinal("links"))) ?? [];
+        var tags  = JsonSerializer.Deserialize(r.GetString(r.GetOrdinal("tags")),  MemctlJsonContext.Default.StringArray) ?? [];
+        var links = JsonSerializer.Deserialize(r.GetString(r.GetOrdinal("links")), MemctlJsonContext.Default.StringArray) ?? [];
 
         float[]? embedding = null;
         var embCol = r.GetOrdinal("embedding");
