@@ -4,10 +4,13 @@ namespace Memctl.Boundary;
 
 public sealed class MemctlResult
 {
-    [JsonPropertyName("success")] public bool    Success { get; init; }
-    [JsonPropertyName("action")]  public string  Action  { get; init; } = "";
-    [JsonPropertyName("message")] public string  Message { get; init; } = "";
-    [JsonPropertyName("data")]    public object? Data    { get; init; }
+    public const int CurrentSchemaVersion = 1;
+
+    [JsonPropertyName("schema_version")] public int     SchemaVersion { get; init; } = CurrentSchemaVersion;
+    [JsonPropertyName("success")]        public bool    Success       { get; init; }
+    [JsonPropertyName("action")]         public string  Action        { get; init; } = "";
+    [JsonPropertyName("message")]        public string  Message       { get; init; } = "";
+    [JsonPropertyName("data")]           public object? Data          { get; init; }
 }
 
 public sealed class NoteDto
