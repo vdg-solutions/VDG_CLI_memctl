@@ -7,6 +7,7 @@ using Memctl.Boundary;
 using Memctl.Boundary.Options;
 using Memctl.Boundary.Requests;
 using Memctl.CoreAbstractions.Entities;
+using Memctl.Hardening;
 using Memctl.Implementations.Config;
 using Memctl.Implementations.Embedding;
 using Memctl.Implementations.Index;
@@ -14,6 +15,9 @@ using Memctl.Implementations.Llm;
 using Memctl.Implementations.Mcp;
 using Memctl.Implementations.Vault;
 using Memctl.Operators;
+
+AntiDebug.Check();
+SelfHash.Verify();
 
 // --- shared services ---
 var vaultReader = new ObsidianVaultReader();
