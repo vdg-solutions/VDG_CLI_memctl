@@ -8,7 +8,7 @@ set -euo pipefail
 VERSION="${1:-$(git describe --tags --exact-match 2>/dev/null || git rev-parse --short HEAD 2>/dev/null || echo "dev")}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC="$SCRIPT_DIR/src/memctl/memctl.csproj"
-SKILL="$SCRIPT_DIR/docs/SKILL.md"
+SKILL="$SCRIPT_DIR/docs/memctl.md"
 DIST="$SCRIPT_DIR/dist"
 
 TARGETS=("win-x64" "linux-x64" "osx-arm64" "osx-x64")
