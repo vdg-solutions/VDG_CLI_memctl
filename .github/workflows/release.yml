@@ -22,7 +22,6 @@ jobs:
           - { os: windows-latest, rid: win-x64,   ext: .exe, archive: zip }
           - { os: ubuntu-latest,  rid: linux-x64, ext: '',   archive: tar }
           - { os: macos-latest,   rid: osx-arm64, ext: '',   archive: tar }
-          - { os: macos-13,       rid: osx-x64,   ext: '',   archive: tar }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
