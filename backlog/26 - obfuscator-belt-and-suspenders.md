@@ -1,8 +1,8 @@
 ---
 id: 26
 type: task
-title: 'Anti-RE hardening — string encoding + anti-debug + anti-tamper on AOT'
-status: Todo
+title: Anti-RE hardening — string encoding + anti-debug + anti-tamper on AOT
+status: Done
 priority: high
 tags:
 - hardening
@@ -147,3 +147,7 @@ publish-aot/memctl.exe status   # should run clean
 ## User Actions Required
 
 - (none — fully bot-actionable since #24 prereqs met)
+
+## Comments
+
+**2026-04-30 21:49 user:** Done. AOT hardening: AntiDebug + SelfHash + BitMono StringsEncryption + FullRenamer. Tamper test verified (1-byte flip → FailFast). 42/42 tests pass. 13MB binary, 15 MCP tools intact.
