@@ -44,6 +44,11 @@ Combine với AOT = belt-and-suspenders. Không cần làm trừ khi threat mode
 
 ## Implementation
 
+### Step 0 — Prereq fail-fast
+- Verify task #24 AOT shipped + green: `git log main --oneline | grep -q 'feat.*aot'` || exit "Blocked by #24".
+- Verify ConfuserEx CLI available: `which Confuser.CLI || which ConfuserEx.CLI` || exit "[USER-ACTION-REQUIRED] Download ConfuserEx 2 from https://github.com/mkaring/ConfuserEx/releases, extract to PATH".
+- Verify `dotnet build -c Release` clean: `dotnet build src/memctl/memctl.csproj -c Release --nologo -v q` || exit "Fix build first".
+
 ### Option A — ConfuserEx 2 (free, OSS, .NET community)
 
 ConfuserEx vốn target .NET IL → áp dụng PRE-AOT compile. Workflow:

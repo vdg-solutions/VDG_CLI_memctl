@@ -50,6 +50,11 @@ Public repo: vdg-solutions/memctl-releases
 
 ## Implementation
 
+### Step 0 — Prereq fail-fast
+- Verify `gh` CLI available + authenticated: `gh auth status` || exit "Install: https://cli.github.com/ then `gh auth login`".
+- Verify org `vdg-solutions` exists + user has admin: `gh api orgs/vdg-solutions -q .login` || exit "Create org first".
+- Verify `RELEASE_REPO_PAT` secret set on private repo: `gh secret list --repo vdg-solutions/VDG_CLI_memctl | grep RELEASE_REPO_PAT` || exit "[USER-ACTION-REQUIRED] Issue PAT — see User Actions".
+
 ### 1. Tạo public release-only repo
 
 ```bash

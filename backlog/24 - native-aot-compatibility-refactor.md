@@ -38,6 +38,12 @@ Sau task #14 Contract First, mọi DTO đã typed → JsonSerializer source gene
 
 ## Implementation
 
+### Step 0 — Prereq fail-fast
+- Windows: `where link.exe` || exit "[USER-ACTION-REQUIRED] Install VS Build Tools 2022 + 'Desktop development with C++' workload".
+- Linux: `which clang ld` || exit "Install: `apt install -y clang libc6-dev`".
+- macOS: `xcode-select -p` || exit "Install: `xcode-select --install`".
+- Verify .NET SDK 10.x: `dotnet --version | grep ^10` || exit "Install .NET 10 SDK".
+
 ### 1. Prerequisites (one-time setup, document in README)
 
 **Windows build host:**
