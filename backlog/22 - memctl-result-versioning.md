@@ -1,14 +1,14 @@
 ---
 id: 22
 type: task
-title: 'MemctlResult versioning — lock v1 schema, breaking change qua v2'
-status: Todo
+title: MemctlResult versioning — lock v1 schema, breaking change qua v2
+status: In Progress
 priority: low
 tags:
-  - api-contract
-  - versioning
-  - boundary
-  - long-term
+- api-contract
+- versioning
+- boundary
+- long-term
 created: 2026-04-30
 updated: 2026-04-30
 ---

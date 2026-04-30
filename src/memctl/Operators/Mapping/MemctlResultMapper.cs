@@ -42,10 +42,11 @@ public static class MemctlResultMapper
 
         return new MemctlResult
         {
-            Success = outcome.Success,
-            Action  = outcome.Action,
-            Message = outcome.Message,
-            Data    = data,
+            SchemaVersion = MemctlResult.CurrentSchemaVersion,
+            Success       = outcome.Success,
+            Action        = outcome.Action,
+            Message       = outcome.Message,
+            Data          = data,
         };
     }
 
