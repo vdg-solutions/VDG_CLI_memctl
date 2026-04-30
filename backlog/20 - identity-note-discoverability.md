@@ -2,7 +2,7 @@
 id: 20
 type: task
 title: Identity note discoverability — Claude Code biết identity note tồn tại + cần set
-status: In Progress
+status: Done
 priority: low
 tags:
 - identity
@@ -77,3 +77,7 @@ Claude Code gọi đầu session, nếu identity chưa set → suggest user.
 ## Effort
 
 ~2h.
+
+## Comments
+
+**2026-04-30 09:20 user:** Phase 6: merged. Initialize hint when identity not set.
