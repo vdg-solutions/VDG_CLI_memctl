@@ -293,12 +293,11 @@ Retrieve the current identity note.
 memctl identity get --vault ./vault
 ```
 
-### `add-turn`
-Log a Telegram conversation turn. Creates `chats/<chat-id>/<date>.md` per day, appends each turn. Required flags: `--chat-id`, `--from`, `--role`, `--text`.
+### `append <id> <content>`
+Append content to an existing note. Re-embeds and re-indexes the note. Accepts note ID or relative file path.
 ```bash
-memctl add-turn --chat-id 123456 --from "Alice" --role user --text "how does X work?" --vault ./vault
-memctl add-turn --chat-id 123456 --from "Bot" --role assistant --text "X works by..." --vault ./vault
-# optional: --user-id, --timestamp (ISO 8601), --write-only (skip index update)
+memctl append abc123 "Additional notes..." --vault ./vault
+memctl append "notes/crypto.md" "More content" --vault ./vault
 ```
 
 ### `organize`
