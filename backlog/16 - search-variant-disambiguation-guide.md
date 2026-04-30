@@ -1,14 +1,14 @@
 ---
 id: 16
 type: task
-title: 'Search variant disambiguation — guide Claude Code chọn đúng search tool'
-status: Todo
+title: Search variant disambiguation — guide Claude Code chọn đúng search tool
+status: Done
 priority: normal
 tags:
-  - mcp
-  - plugin-ux
-  - claude-code
-  - dx
+- mcp
+- plugin-ux
+- claude-code
+- dx
 created: 2026-04-30
 updated: 2026-04-30
 ---
@@ -77,3 +77,7 @@ Con: breaking change MCP API.
 ~2h cho phương án A, ~5h cho phương án B.
 
 Recommend **A** (low risk, đủ giải quyết confusion).
+
+## Comments
+
+**2026-04-30 09:14 user:** Phase 6: merged. search_help MCP tool added; per-tool 'Use when' descriptions also live in tool list (from #15).
