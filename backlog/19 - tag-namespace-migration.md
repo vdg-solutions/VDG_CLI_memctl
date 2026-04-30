@@ -2,7 +2,7 @@
 id: 19
 type: task
 title: Tag namespace migration — dọn legacy tag (telegram, chat-*) trong vault data
-status: In Progress
+status: Done
 priority: low
 tags:
 - migration
@@ -83,3 +83,7 @@ memctl migrate-tags --interactive                # ask per tag
 ## Effort
 
 ~3-4h.
+
+## Comments
+
+**2026-04-30 09:23 user:** Phase 6: merged. memctl migrate-tags command live + dry-run verified.
