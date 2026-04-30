@@ -92,81 +92,94 @@ public sealed class McpServerOperator(
             tools = new object[]
             {
                 MakeTool("search",
-                    "Hybrid semantic+BM25 search over vault notes, sorted by relevance",
+                    "Hybrid semantic+BM25 search (RRF fusion). Use when query is general or you don't know exact terms.",
                     req: [("query",  "string",  "Search query text")],
                     opt: [("limit",  "integer", "Max results (default 10)"),
-                          ("folder", "string",  "Filter to folder prefix (e.g. crypto)")]),
+                          ("folder", "string",  "Filter to folder prefix (e.g. crypto)")],
+                    dataDtoName: "SearchResultDto"),
 
                 MakeTool("get",
-                    "Retrieve a note by ID or file path; increments access_count",
+                    "Retrieve a single note by ID or file path; increments access_count. Use when you have a specific identifier.",
                     req: [("id", "string", "Note ID or relative file path")],
-                    opt: []),
+                    opt: [],
+                    dataDtoName: "NoteDto"),
 
                 MakeTool("list",
-                    "List notes sorted by importance (weight DESC, access_count DESC)",
+                    "List notes sorted by importance (weight DESC, access_count DESC). Use at session start to load top memories.",
                     req: [],
                     opt: [("limit", "integer", "Max results (default 10)"),
-                          ("tag",   "string",  "Filter by single tag")]),
+                          ("tag",   "string",  "Filter by single tag")],
+                    dataDtoName: "NoteListResultDto"),
 
                 MakeTool("search_semantic",
-                    "Pure vector similarity search over embedded notes",
+                    "Pure vector similarity over embedded notes. Use when query is conceptual and exact words may not appear in notes.",
                     req: [("query",  "string",  "Search query text")],
                     opt: [("limit",  "integer", "Max results (default 10)"),
                           ("folder", "string",  "Filter to folder prefix"),
-                          ("scope",  "string",  "Comma-separated note IDs to restrict to")]),
+                          ("scope",  "string",  "Comma-separated note IDs to restrict to")],
+                    dataDtoName: "SearchResultDto"),
 
                 MakeTool("search_tags",
-                    "Find notes that have specific tag(s)",
+                    "Filter notes by tag membership. Use when user mentions a tag explicitly (e.g. 'notes tagged crypto').",
                     req: [("tags", "string", "Comma-separated tag list")],
                     opt: [("match", "string",  "any or all (default: any)"),
-                          ("limit", "integer", "Max results (default 10)")]),
+                          ("limit", "integer", "Max results (default 10)")],
+                    dataDtoName: "SearchTagsResultDto"),
 
                 MakeTool("search_date",
-                    "Find notes by creation date range",
+                    "Filter notes by creation date range. Use when user asks 'what did I work on last week'.",
                     req: [],
                     opt: [("from",  "string",  "ISO 8601 start date (inclusive)"),
                           ("to",    "string",  "ISO 8601 end date (inclusive)"),
-                          ("limit", "integer", "Max results (default 10)")]),
+                          ("limit", "integer", "Max results (default 10)")],
+                    dataDtoName: "SearchDateResultDto"),
 
                 MakeTool("search_links",
-                    "Find notes linked to or from a given note (wikilinks graph)",
+                    "Traverse wikilinks graph from a source note. Use to find notes linked to or from a specific note.",
                     req: [("id", "string", "Note ID or file path")],
-                    opt: [("depth", "integer", "Link traversal depth (default 1)")]),
+                    opt: [("depth", "integer", "Link traversal depth (default 1)")],
+                    dataDtoName: "SearchLinksResultDto"),
 
                 MakeTool("get_identity",
-                    "Retrieve the vault identity note — load this first in every session for context",
+                    "Retrieve the vault identity note (Layer 0 context). Use at the start of every session to load project context.",
                     req: [],
-                    opt: []),
+                    opt: [],
+                    dataDtoName: "NoteDto"),
 
                 MakeTool("create",
-                    "Create a new note in the vault and index it immediately",
+                    "Create a new note and index it immediately. Use to persist a decision, finding, or insight.",
                     req: [("content", "string", "Note body text")],
                     opt: [("title",    "string",  "Note title (extracted from content if omitted)"),
                           ("folder",   "string",  "Subfolder path relative to vault root (e.g. notes)"),
-                          ("filename", "string",  "Filename without extension (default: sanitized title)")]),
+                          ("filename", "string",  "Filename without extension (default: sanitized title)")],
+                    dataDtoName: "NoteDto"),
 
                 MakeTool("update",
-                    "Replace the content of an existing note by ID or file path",
+                    "Replace the entire content of an existing note. Use when rewriting a note.",
                     req: [("id",      "string", "Note ID or relative file path"),
                           ("content", "string", "New note body text")],
-                    opt: []),
+                    opt: [],
+                    dataDtoName: "NoteDto"),
 
                 MakeTool("append",
-                    "Append text to an existing note without overwriting existing content",
+                    "Append text to an existing note without overwriting. Use when adding incremental updates.",
                     req: [("id",      "string", "Note ID or relative file path"),
                           ("content", "string", "Text to append")],
-                    opt: []),
+                    opt: [],
+                    dataDtoName: "NoteDto"),
 
                 MakeTool("set_weight",
-                    "Set note importance weight (0.0-1.0); affects list order",
+                    "Set note importance weight (0.0-1.0); affects list order. Use to mark notes that matter for next session.",
                     req: [("id",     "string", "Note ID or relative file path"),
                           ("weight", "number", "Importance weight 0.0-1.0")],
-                    opt: []),
+                    opt: [],
+                    dataDtoName: "WeightChangeDto"),
 
                 MakeTool("delete",
-                    "Permanently delete a note from vault and index by ID or file path",
+                    "Permanently delete a note from vault and index. Use to remove obsolete notes.",
                     req: [("id", "string", "Note ID or relative file path")],
-                    opt: []),
+                    opt: [],
+                    dataDtoName: "NoteDto"),
             },
         },
     };
@@ -360,7 +373,8 @@ Before ending session:
         string name,
         string description,
         (string name, string type, string desc)[] req,
-        (string name, string type, string desc)[] opt)
+        (string name, string type, string desc)[] opt,
+        string? dataDtoName = null)
     {
         var props = new Dictionary<string, object>();
         foreach (var (n, t, d) in req) props[n] = new { type = t, description = d };
@@ -375,8 +389,29 @@ Before ending session:
                 properties = props,
                 required   = req.Select(r => r.name).ToArray(),
             },
+            outputSchema = BuildOutputSchema(dataDtoName),
         };
     }
+
+    private static object BuildOutputSchema(string? dataDtoName) => new
+    {
+        type       = "object",
+        properties = new Dictionary<string, object>
+        {
+            ["success"] = new { type = "boolean", description = "True if the operation succeeded" },
+            ["action"]  = new { type = "string",  description = "Echoed action name matching the tool" },
+            ["message"] = new { type = "string",  description = "Human-readable status message" },
+            ["data"]    = dataDtoName is null
+                ? (object)new { type = new[] { "object", "null" }, description = "No payload" }
+                : new
+                  {
+                      type        = new[] { "object", "null" },
+                      description = $"Boundary DTO: {dataDtoName} (see Boundary/MemctlResult.cs for full schema). " +
+                                    "Always typed; envelope keys (success/action/message/data) are stable.",
+                  },
+        },
+        required = new[] { "success", "action", "message" },
+    };
 
     // --- parameter extraction helpers ---
 

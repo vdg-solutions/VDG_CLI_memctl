@@ -1,14 +1,14 @@
 ---
 id: 15
 type: task
-title: 'MCP tool schema completeness — inputSchema + outputSchema reference Boundary DTO'
-status: Todo
+title: MCP tool schema completeness — inputSchema + outputSchema reference Boundary DTO
+status: In Progress
 priority: high
 tags:
-  - mcp
-  - api-contract
-  - plugin-ux
-  - claude-code
+- mcp
+- api-contract
+- plugin-ux
+- claude-code
 created: 2026-04-30
 updated: 2026-04-30
 ---
