@@ -2,7 +2,7 @@
 id: 24
 type: task
 title: Native AOT compatibility refactor — JsonSerializerContext, YamlDotNet static, manual validation
-status: In Progress
+status: Done
 priority: high
 tags:
 - aot
@@ -246,3 +246,5 @@ Test project hiện tại dùng xUnit reflection. Tests **không cần** AOT —
 ## Comments
 
 **2026-04-30 19:39 user:** Phase 0: env probe pass. MSVC v14.50.35717 found. Starting /sdlc pipeline.
+
+**2026-04-30 20:09 user:** Phase 6 complete: merged to main. AOT win-x64 0 warnings, 13MB binary, 164ms cold-start, 42/42 tests, wire format unchanged.
