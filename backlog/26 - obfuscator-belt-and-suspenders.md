@@ -26,22 +26,12 @@ Public surface (CLI commands, JSON wire keys, MCP protocol, --help) giữ plaint
 - Verify `dotnet build -c Release` clean: `dotnet build src/memctl/memctl.csproj -c Release --nologo -v q` || exit "Fix build first".
 - Verify MSVC linker present: `where /R "C:\Program Files (x86)\Microsoft Visual Studio" link.exe` returns hits.
 
-### Step 1 — Roslyn source generator for string encoding
+### Step 1 — BitMono string encryption + symbol rename via MSBuild target
 
-- **File CREATE:** `src/Memctl.SourceGen/StringEncodeGenerator.cs` — Roslyn `IIncrementalGenerator`. Scans for calls to `Memctl.Hardening.S.Of("plaintext")` literal. At compile-time, encodes plaintext with XOR + per-string nonce (derived from string content hash). Replaces with `S.Decode(byte[]{...}, byte)`.
-- **File CREATE:** `src/Memctl.SourceGen/Memctl.SourceGen.csproj` — net10.0, references `Microsoft.CodeAnalysis.CSharp` 4.x.
-- **File CREATE:** `src/memctl/Hardening/S.cs` — runtime decoder. `S.Decode(byte[] buf, byte key)` returns `Encoding.UTF8.GetString(...)` post-XOR.
-
-### Step 2 — String encoding callsite migration (manual selection)
-
-Encode strings in: SQL queries, regex patterns, identity hint content, search_help markdown, file path templates, log messages, MCP method routing.
-
-NEVER encode: `JsonPropertyName` attribute args, System.CommandLine option/arg names, public exception messages already in user-visible flows, README content.
-
-- **File MODIFY:** `src/memctl/Implementations/Index/SqliteNoteIndex.cs` — wrap SQL strings via `S.Of`.
-- **File MODIFY:** `src/memctl/Operators/IdentityOperator.cs` — wrap identity content template.
-- **File MODIFY:** `src/memctl/Implementations/Mcp/McpServerAdapter.cs` — wrap method routing string keys ("initialize", "tools/list", "tools/call", "ping") + tool descriptions.
-- **File MODIFY:** ~20 callsites total via grep audit.
+- **File MODIFY:** `src/memctl/memctl.csproj` — add `<Target Name="ObfuscateBeforeAot" AfterTargets="CopyFilesToOutputDirectory" BeforeTargets="IlcCompile" Condition="'$(PublishAot)' == 'true' AND '$(Obfuscate)' == 'true'">` invoking `bitmono.console -p StringsEncryption FullRenamer` between Compile + IlcCompile. Output replaces `bin/.../memctl.dll` with obfuscated copy → ILCompiler reads obfuscated IL → native binary embeds encrypted strings.
+- **Tool requirement:** `dotnet tool install -g BitMono.GlobalTool` (v0.39.0+, .NET 9 with `DOTNET_ROLL_FORWARD=Major`).
+- **No source-code changes:** BitMono StringsEncryption auto-encrypts all string literals in IL — no per-callsite migration needed.
+- **Public surface preserved:** `[JsonPropertyName]` attribute args + System.CommandLine option names live as attribute values, not encrypted (BitMono preserves attributes).
 
 ### Step 3 — Anti-debug
 
@@ -124,7 +114,7 @@ publish-aot/memctl.exe status   # should run clean
 - Code signing / Authenticode (separate task).
 - DRM / license server (separate concern).
 - Anti-decompile native binary (out of scope — AOT alone, no Themida/VMProtect).
-- BitMono / ConfuserEx integration (evaluated; not used — manual code AOT-safer).
+- ConfuserEx 2 (evaluated; stale, .NET 6 era, .NET 10 untested).
 - Encoding `JsonPropertyName` / CLI option strings (public surface, must stay plain).
 
 ## Dependencies
@@ -136,23 +126,23 @@ publish-aot/memctl.exe status   # should run clean
 
 | Risk | Mitigation |
 |------|-----------|
-| Source gen breaks AOT compile | Test via `dotnet publish` after each new encoded callsite; rollback callsite |
-| Self-hash baking corrupts binary | Use byte search-and-replace, not arbitrary edit; backup pre-bake; verify via file probe post-bake |
+| BitMono FullRenamer breaks ILCompiler reading obfuscated IL | Test via `bash scripts/build-aot-hardened.sh win-x64`; if fails, drop FullRenamer, keep StringsEncryption only |
+| BitMono StringsEncryption breaks JsonSerializerContext source-gen | Test JIT smoke on obfuscated DLL first; AOT publish only if JIT loads cleanly |
+| Self-hash baking corrupts binary | Append-only trailer + idempotent baker; verify via file probe post-bake |
 | Anti-debug false positive on Windows Defender / EDR | `MEMCTL_ALLOW_DEBUG=1` escape; ship 2 flavors if too many reports |
 | Determined reverser patches out check | Accept — anti-debug only blocks casual inspection; defense in depth, not absolute |
-| String encoding XOR weak | Acceptable for hobby-grade. NetReactor + AES is overkill cho threat model |
+| Type names persist (AOT metadata via JsonSerializable) | Documented limitation; no business-logic leak (just type names) |
 
 ## Effort
 
-~8-10h:
-- 2h: Roslyn source generator (StringEncodeGenerator.cs)
-- 1h: runtime decoder S.cs
-- 2h: pick + wrap ~20 callsites
-- 1h: AntiDebug + SelfHash code
-- 1h: bake-selfhash.ps1 script
-- 1h: tests (StringEncodeTests, tamper test)
-- 1h: AOT verify, smoke, snapshot diff
-- 1h: docs
+~5-7h actual:
+- 0.5h: BitMono GlobalTool install + .NET 9 roll-forward
+- 1h: MSBuild target ObfuscateBeforeAot wiring
+- 1h: AntiDebug.cs (Win/Linux/macOS variants)
+- 1h: SelfHash.cs + bake-selfhash.{sh,ps1} scripts
+- 1h: build-aot-hardened.sh orchestrator
+- 1h: AOT publish verify + tamper test + smoke + snapshot diff
+- 0.5h: docs
 
 ## User Actions Required
 

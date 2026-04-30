@@ -350,6 +350,8 @@ MigrationBackup/
 
 dist/
 .memctl/
+obf/
+tools/
 
 .autoresearch/
 

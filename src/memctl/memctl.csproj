@@ -31,4 +31,20 @@
     <PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
   </ItemGroup>
 
+  <!-- Hardened AOT: obfuscate IL before ILCompiler reads it. -->
+  <!-- Activate via -p:Obfuscate=true; combine with -p:PublishAot=true. -->
+  <Target Name="ObfuscateBeforeAot"
+          AfterTargets="CopyFilesToOutputDirectory"
+          BeforeTargets="IlcCompile"
+          Condition="'$(PublishAot)' == 'true' AND '$(Obfuscate)' == 'true'">
+    <Message Importance="high" Text="ObfuscateBeforeAot — running BitMono StringsEncryption + FullRenamer on $(OutputPath)$(AssemblyName).dll" />
+    <RemoveDir Directories="$(IntermediateOutputPath)obf" />
+    <MakeDir   Directories="$(IntermediateOutputPath)obf" />
+    <Exec Command="bitmono.console -f &quot;$(OutputPath)$(AssemblyName).dll&quot; -l &quot;$(OutputPath.TrimEnd('\'))&quot; -o &quot;$(IntermediateOutputPath)obf&quot; -p StringsEncryption FullRenamer"
+          EnvironmentVariables="DOTNET_ROLL_FORWARD=Major" />
+    <Copy SourceFiles="$(IntermediateOutputPath)obf\$(AssemblyName)_bitmono.dll"
+          DestinationFiles="$(OutputPath)$(AssemblyName).dll"
+          OverwriteReadOnlyFiles="true" />
+  </Target>
+
 </Project>
