@@ -1,0 +1,138 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PROJECT: src/memctl/memctl.csproj
+  RELEASE_REPO: vdg-solutions/memctl-releases
+
+jobs:
+  build:
+    name: build-${{ matrix.rid }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, rid: win-x64,   ext: .exe, archive: zip }
+          - { os: ubuntu-latest,  rid: linux-x64, ext: '',   archive: tar }
+          - { os: macos-latest,   rid: osx-arm64, ext: '',   archive: tar }
+          - { os: macos-13,       rid: osx-x64,   ext: '',   archive: tar }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          dotnet-version: '10.x'
+
+      - name: Restore
+        run: dotnet restore ${{ env.PROJECT }}
+
+      - name: Publish AOT
+        shell: bash
+        run: |
+          dotnet publish "${{ env.PROJECT }}" \
+            -c Release \
+            -r ${{ matrix.rid }} \
+            -p:PublishAot=true \
+            -p:DebugType=none \
+            -p:DebugSymbols=false \
+            -p:StripSymbols=true \
+            -o publish
+
+      - name: Package
+        shell: bash
+        env:
+          RID: ${{ matrix.rid }}
+          EXT: ${{ matrix.ext }}
+          ARCHIVE: ${{ matrix.archive }}
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          mkdir -p package
+          cp "publish/memctl${EXT}" package/
+          cp docs/memctl.md package/SKILL.md
+          [ -f README.md ] && cp README.md package/ || true
+          [ -f LICENSE ] && cp LICENSE package/ || true
+          if [ "$ARCHIVE" = "zip" ]; then
+            (cd package && 7z a -tzip "../memctl-${RID}-${VER}.zip" * >/dev/null)
+          else
+            tar -C package -czf "memctl-${RID}-${VER}.tar.gz" .
+          fi
+          ls -la memctl-${RID}-${VER}.*
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: memctl-${{ matrix.rid }}
+          path: |
+            memctl-${{ matrix.rid }}-*.zip
+            memctl-${{ matrix.rid }}-*.tar.gz
+          retention-days: 7
+          if-no-files-found: error
+
+  pack-tool:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with: { dotnet-version: '10.x' }
+      - name: Build nupkg
+        shell: bash
+        run: |
+          VER="${GITHUB_REF_NAME#v}"
+          dotnet pack "${{ env.PROJECT }}" \
+            -c Release \
+            -p:Version="$VER" \
+            -o nupkg
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: memctl-nupkg
+          path: nupkg/*.nupkg
+          retention-days: 7
+          if-no-files-found: error
+
+  release:
+    needs: [build, pack-tool]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: artifacts
+
+      - name: Stage release files
+        shell: bash
+        run: |
+          mkdir -p release
+          find artifacts -type f \( -name '*.zip' -o -name '*.tar.gz' -o -name '*.nupkg' \) -exec cp {} release/ \;
+          ls -la release/
+
+      - name: Generate release notes
+        shell: bash
+        run: |
+          PREV=$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || git rev-list --max-parents=0 HEAD)
+          {
+            echo "## Changes"
+            echo
+            git log "${PREV}..${GITHUB_REF_NAME}" --pretty=format:'- %s' | head -100
+          } > release-notes.md
+          cat release-notes.md
+
+      - name: Publish to release repo
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_REPO_PAT }}
+        shell: bash
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --repo "${{ env.RELEASE_REPO }}" \
+            --title "${GITHUB_REF_NAME}" \
+            --notes-file release-notes.md \
+            release/*
