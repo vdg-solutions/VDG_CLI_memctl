@@ -52,3 +52,37 @@ public sealed class GrepHitDto
     [JsonPropertyName("line")]    public int    Line    { get; init; }
     [JsonPropertyName("content")] public string Content { get; init; } = "";
 }
+
+public sealed class SearchTagsResultDto
+{
+    [JsonPropertyName("tags")]      public string[]  Tags     { get; init; } = [];
+    [JsonPropertyName("match_all")] public bool      MatchAll { get; init; }
+    [JsonPropertyName("count")]     public int       Count    { get; init; }
+    [JsonPropertyName("results")]   public NoteDto[] Results  { get; init; } = [];
+}
+
+public sealed class SearchLinksResultDto
+{
+    [JsonPropertyName("source_id")] public string    SourceId { get; init; } = "";
+    [JsonPropertyName("depth")]     public int       Depth    { get; init; }
+    [JsonPropertyName("count")]     public int       Count    { get; init; }
+    [JsonPropertyName("results")]   public NoteDto[] Results  { get; init; } = [];
+}
+
+public sealed class NoteListResultDto
+{
+    [JsonPropertyName("count")] public int       Count { get; init; }
+    [JsonPropertyName("notes")] public NoteDto[] Notes { get; init; } = [];
+}
+
+public sealed class TagsListResultDto
+{
+    [JsonPropertyName("count")] public int      Count { get; init; }
+    [JsonPropertyName("tags")]  public TagDto[] Tags  { get; init; } = [];
+}
+
+public sealed class GrepListResultDto
+{
+    [JsonPropertyName("count")] public int          Count { get; init; }
+    [JsonPropertyName("hits")]  public GrepHitDto[] Hits  { get; init; } = [];
+}
