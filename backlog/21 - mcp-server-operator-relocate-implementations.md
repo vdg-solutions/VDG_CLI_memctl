@@ -2,13 +2,13 @@
 id: 21
 type: task
 title: 'A.D.D V3: McpServerOperator → Implementations/Mcp (Web Adapter pattern)'
-status: Todo
+status: In Progress
 priority: normal
 tags:
-  - architecture
-  - refactor
-  - a.d.d-v3
-  - mcp
+- architecture
+- refactor
+- a.d.d-v3
+- mcp
 created: 2026-04-30
 updated: 2026-04-30
 ---

@@ -3,11 +3,18 @@ using Memctl.CoreAbstractions.Entities;
 using Memctl.CoreAbstractions.Ports;
 using Memctl.Implementations.Config;
 using Memctl.Implementations.Embedding;
+using Memctl.Operators;
 using Memctl.Operators.Mapping;
 
-namespace Memctl.Operators;
+namespace Memctl.Implementations.Mcp;
 
-public sealed class McpServerOperator(
+// A.D.D V3 Web Adapter at the system edge. Strict A.D.D would have this
+// adapter call Operators only via Ports defined in Core Abstractions;
+// port extraction for the ~15 individual operators is intentionally
+// deferred. The resulting Operators-namespace dependency is the only
+// documented A.D.D leak — no MCP protocol types live in the Operators
+// layer anymore.
+public sealed class McpServerAdapter(
     IVaultReader vaultReader,
     INoteIndex   index,
     string       vaultPath,
