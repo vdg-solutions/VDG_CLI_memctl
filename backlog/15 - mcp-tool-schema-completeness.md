@@ -2,7 +2,7 @@
 id: 15
 type: task
 title: MCP tool schema completeness — inputSchema + outputSchema reference Boundary DTO
-status: In Progress
+status: Done
 priority: high
 tags:
 - mcp
@@ -85,3 +85,7 @@ Per tool, update:
 ## Effort
 
 ~3-4h: audit 13 tool + viết schema + test với MCP Inspector.
+
+## Comments
+
+**2026-04-30 09:13 user:** Phase 6: merged. All 13 MCP tools have outputSchema + Use-when descriptions.
