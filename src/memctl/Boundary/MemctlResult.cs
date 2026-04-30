@@ -225,3 +225,22 @@ public sealed class VaultRefDto
 {
     [JsonPropertyName("vault")] public string Vault { get; init; } = "";
 }
+
+public sealed class HookLogEntryDto
+{
+    [JsonPropertyName("timestamp")] public string  Timestamp { get; init; } = "";
+    [JsonPropertyName("action")]    public string  Action    { get; init; } = "";
+    [JsonPropertyName("success")]   public bool    Success   { get; init; }
+    [JsonPropertyName("error")]     public string? Error     { get; init; }
+}
+
+public sealed class HookStatusDto
+{
+    [JsonPropertyName("log_path")]       public string             LogPath       { get; init; } = "";
+    [JsonPropertyName("log_exists")]     public bool               LogExists     { get; init; }
+    [JsonPropertyName("recent_success")] public int                RecentSuccess { get; init; }
+    [JsonPropertyName("recent_fail")]    public int                RecentFail    { get; init; }
+    [JsonPropertyName("last_error")]     public string?            LastError     { get; init; }
+    [JsonPropertyName("last_error_at")]  public string?            LastErrorAt   { get; init; }
+    [JsonPropertyName("last_entries")]   public HookLogEntryDto[]  LastEntries   { get; init; } = [];
+}

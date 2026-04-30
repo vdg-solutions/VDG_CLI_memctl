@@ -16,6 +16,7 @@ public static class MemctlResultMapper
             VaultStats stats                  => MapStats(stats),
             VaultStatus status                => MapStatus(status),
             VaultRef vref                     => MapVaultRef(vref),
+            HookStatus hs                     => MapHookStatus(hs),
             WeightChange wc                   => MapWeight(wc),
             DecayReport dr                    => MapDecay(dr),
             CaptureReport cr                  => MapCapture(cr),
@@ -84,6 +85,23 @@ public static class MemctlResultMapper
     };
 
     public static VaultRefDto MapVaultRef(VaultRef v) => new() { Vault = v.Vault };
+
+    public static HookStatusDto MapHookStatus(HookStatus s) => new()
+    {
+        LogPath       = s.LogPath,
+        LogExists     = s.LogExists,
+        RecentSuccess = s.RecentSuccess,
+        RecentFail    = s.RecentFail,
+        LastError     = s.LastError,
+        LastErrorAt   = s.LastErrorAt,
+        LastEntries   = s.LastEntries.Select(e => new HookLogEntryDto
+        {
+            Timestamp = e.Timestamp,
+            Action    = e.Action,
+            Success   = e.Success,
+            Error     = e.Error,
+        }).ToArray(),
+    };
 
     public static WeightChangeDto MapWeight(WeightChange w) => new()
     {

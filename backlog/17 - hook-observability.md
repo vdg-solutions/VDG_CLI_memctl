@@ -1,14 +1,14 @@
 ---
 id: 17
 type: task
-title: 'Hook observability — log capture/context-inject failures cho Claude Code debug được'
-status: Todo
+title: Hook observability — log capture/context-inject failures cho Claude Code debug được
+status: In Progress
 priority: normal
 tags:
-  - hooks
-  - observability
-  - plugin-ux
-  - claude-code
+- hooks
+- observability
+- plugin-ux
+- claude-code
 created: 2026-04-30
 updated: 2026-04-30
 ---

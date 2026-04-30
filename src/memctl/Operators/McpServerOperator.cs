@@ -186,6 +186,12 @@ public sealed class McpServerOperator(
                     req: [],
                     opt: [],
                     dataDtoName: null),
+
+                MakeTool("hook_status",
+                    "Report recent capture/context-inject hook activity. Call when memory seems missing — failures are silent by NFR-002 but logged.",
+                    req: [],
+                    opt: [],
+                    dataDtoName: "HookStatusDto"),
             },
         },
     };
@@ -216,6 +222,7 @@ public sealed class McpServerOperator(
                 "set_weight"      => CallSetWeight(args),
                 "delete"          => CallDelete(args),
                 "search_help"     => CallSearchHelp(),
+                "hook_status"     => new HookStatusOperator().Execute(vaultPath),
                 _                 => null,
             };
 
