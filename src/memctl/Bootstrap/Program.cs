@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using System.CommandLine.Invocation;
 using Memctl.Bootstrap;
 using Memctl.Boundary.Options;
+using Memctl.Boundary.Requests;
 using Memctl.CoreAbstractions.Entities;
 using Memctl.Implementations.Config;
 using Memctl.Implementations.Embedding;
@@ -127,17 +128,23 @@ addCmd.SetHandler(async ctx =>
 {
     var g = G(ctx);
     if (RequireVault(g, ctx) is not { } vault) return;
-    var pr   = ctx.ParseResult;
-    var emb  = await GetEmbedding(g);
-    var op   = new AddOperator(vaultReader, noteIndex, emb);
-    var tags = pr.GetValueForOption(addTagsOpt)?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-    var outcome = await op.ExecuteAsync(
-        vault,
-        pr.GetValueForArgument(addTextArg),
-        pr.GetValueForOption(addTitleOpt),
-        tags,
-        pr.GetValueForOption(addFileOpt),
-        LlmClient(g));
+    var pr  = ctx.ParseResult;
+    var req = new AddNoteRequest
+    {
+        Text  = pr.GetValueForArgument(addTextArg),
+        Title = pr.GetValueForOption(addTitleOpt),
+        Tags  = pr.GetValueForOption(addTagsOpt)?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+        File  = pr.GetValueForOption(addFileOpt),
+    };
+    if (RequestValidator.Validate(req, "add") is { } badReq)
+    {
+        ResultPrinter.Print(badReq);
+        ctx.ExitCode = 1;
+        return;
+    }
+    var emb     = await GetEmbedding(g);
+    var op      = new AddOperator(vaultReader, noteIndex, emb);
+    var outcome = await op.ExecuteAsync(vault, req.Text, req.Title, req.Tags, req.File, LlmClient(g));
     ResultPrinter.Print(outcome);
     ctx.ExitCode = outcome.Success ? 0 : 1;
 });
@@ -427,11 +434,22 @@ weightCmd.SetHandler(ctx =>
 {
     var g = G(ctx);
     if (RequireVault(g, ctx) is not { } vault) return;
-    var pr      = ctx.ParseResult;
-    var outcome = new WeightOperator(vaultReader, noteIndex).Execute(
-        vault,
-        pr.GetValueForArgument(weightIdArg),
-        pr.GetValueForArgument(weightValArg));
+    var pr  = ctx.ParseResult;
+    var raw = pr.GetValueForArgument(weightValArg);
+    if (!float.TryParse(raw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var parsed))
+    {
+        ResultPrinter.Print(MemctlOutcome.Fail("weight", $"Invalid weight value: '{raw}' — must be a number"));
+        ctx.ExitCode = 1;
+        return;
+    }
+    var req = new SetWeightRequest { Id = pr.GetValueForArgument(weightIdArg), Weight = parsed };
+    if (RequestValidator.Validate(req, "weight") is { } badReq)
+    {
+        ResultPrinter.Print(badReq);
+        ctx.ExitCode = 1;
+        return;
+    }
+    var outcome = new WeightOperator(vaultReader, noteIndex).Execute(vault, req.Id, req.Weight.ToString(System.Globalization.CultureInfo.InvariantCulture));
     ResultPrinter.Print(outcome);
     ctx.ExitCode = outcome.Success ? 0 : 1;
 });
@@ -447,13 +465,22 @@ decayCmd.AddOption(decayFactorOpt);
 decayCmd.AddOption(decayDryRunOpt);
 decayCmd.SetHandler(ctx =>
 {
-    var g      = G(ctx);
+    var g  = G(ctx);
     if (RequireVault(g, ctx) is not { } vault) return;
-    var pr     = ctx.ParseResult;
-    var days   = pr.GetValueForOption(decayDaysOpt);
-    var factor = (float)pr.GetValueForOption(decayFactorOpt);
-    var dryRun = pr.GetValueForOption(decayDryRunOpt);
-    var outcome = new DecayOperator(vaultReader, noteIndex).Execute(vault, days, factor, dryRun);
+    var pr = ctx.ParseResult;
+    var req = new DecayRequest
+    {
+        Days        = pr.GetValueForOption(decayDaysOpt),
+        DecayFactor = pr.GetValueForOption(decayFactorOpt),
+        DryRun      = pr.GetValueForOption(decayDryRunOpt),
+    };
+    if (RequestValidator.Validate(req, "decay") is { } badReq)
+    {
+        ResultPrinter.Print(badReq);
+        ctx.ExitCode = 1;
+        return;
+    }
+    var outcome = new DecayOperator(vaultReader, noteIndex).Execute(vault, req.Days, (float)req.DecayFactor, req.DryRun);
     ResultPrinter.Print(outcome);
     ctx.ExitCode = outcome.Success ? 0 : 1;
 });

@@ -1,14 +1,14 @@
 ---
 id: 23
 type: task
-title: 'Boundary DTO validation attributes — input validation tại system edge'
-status: Todo
+title: Boundary DTO validation attributes — input validation tại system edge
+status: Done
 priority: low
 tags:
-  - boundary
-  - validation
-  - api-contract
-  - safety
+- boundary
+- validation
+- api-contract
+- safety
 created: 2026-04-30
 updated: 2026-04-30
 ---
@@ -114,3 +114,7 @@ if (!Validator.TryValidateObject(request, ctx, results, validateAllProperties: t
 ## Effort
 
 ~4-5h (audit + viết Request DTO cho 25+ command).
+
+## Comments
+
+**2026-04-30 09:26 user:** Phase 6: merged. Request DTO + validation pattern established. weight/decay/add wired. Other commands follow-up.
