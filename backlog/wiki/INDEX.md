@@ -38,9 +38,10 @@ These are **reference docs**, NOT `/sdlc` intake. `/sdlc` only picks up `backlog
 | `backlog/<N> - <slug>.md` | Active SDLC task files — picked up by `/sdlc` |
 | `backlog/wishlist.md` | Cosmetic deferrals not yet promoted to backlog |
 | `backlog/TEMPLATE.md` | Canonical task template |
-| `docs/specs/<id>-spec.md` | Per-task requirements spec (frozen artifact) |
-| `docs/designs/<id>-design.md` | Per-task technical design (frozen artifact) |
-| `docs/retros/<id>-retro.md` | Per-task retrospective (frozen artifact) |
+| `docs/specs/<id>-spec.md` | Active task spec (during /sdlc pipeline) |
+| `docs/designs/<id>-design.md` | Active task design (during /sdlc pipeline) |
+| `docs/retros/<id>-retro.md` | Active task retro (during /sdlc Phase 6) |
+| `docs/archives/{specs,designs,retros}/` | **Frozen** historical SDLC artifacts (post-Done) — see [archive README](../../docs/archives/README.md) |
 | `docs/memctl.md` | Skill source of truth (synced to plugin via `scripts/sync-skill-to-plugin.sh`) |
 | `docs/refs/articles/` | External research references |
 

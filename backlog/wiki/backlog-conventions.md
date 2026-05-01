@@ -56,7 +56,20 @@ Don't:
 
 ---
 
-## When to ARCHIVE instead of fix
+## SDLC artifact archive (per-task spec/design/retro)
+
+Per-task `docs/specs/<id>-spec.md`, `docs/designs/<id>-design.md`, `docs/retros/<id>-retro.md` are **active during /sdlc pipeline** (live in `docs/specs/` etc.). After backlog task hits `status: Done`:
+
+1. `git mv docs/specs/<id>-spec.md docs/archives/specs/<id>-spec.md` (and design/retro if present)
+2. Commit `chore: archive task <id> SDLC artifacts`
+
+Active `docs/specs/`, `docs/designs/`, `docs/retros/` only contain in-flight tasks. Frozen artifacts in `docs/archives/{specs,designs,retros}/`. See [../../docs/archives/README.md](../../docs/archives/README.md) for full convention.
+
+Auto-archive on /sdlc Phase 6 = future improvement (see `backlog/wishlist.md`).
+
+---
+
+## When to ARCHIVE backlog item itself instead of fixing
 
 If a Done item describes a path that's been completely superseded (e.g., the entire feature was replaced 6 months later), don't try to keep the snippet current. Move the file to `backlog/archive/` and add a one-line forward-reference:
 
