@@ -534,25 +534,53 @@ If ANY threshold breached → `memctl status` shows:
 
 SessionStart hook (existing) reads pressure → emit `::warning::` annotation if `recommended: true`. User sees on every session start until they run maintain.
 
-### Auto-trigger (opt-in, off by default)
+### Self-deciding maintain (default: ON, hook-triggered)
 
-```bash
-memctl config set maintenance.auto-quick.threshold 50      # auto-run --quick at 50 turns
-memctl config set maintenance.auto-full.day-of-week sunday # auto-run --full Sunday 00:00
-memctl config set maintenance.auto-trigger off             # default: notify-only
+**Single command, auto-scopes.** Memctl reads pressure → picks operation:
+
+```
+read pressure.json
+if contradiction_flags > 0          → lint + flag tentative for review
+elif patterns_pending_promotion >= 3 → full (consolidate + promote + lint)
+elif concept_gap_count > 5           → full + synthesize
+elif days_since_full_maintain > 7    → full
+elif unconsolidated_turns_count > 50 → quick (decay + cache + INDEX)
+elif hours_since_quick_maintain > 24 → quick
+else                                 → noop, exit 0 silent
 ```
 
-Default = notify-only. User decides when to run. Auto opt-in for users wanting hands-off.
+User never picks scope. Memctl decides.
 
-### Manual commands
+### Auto-trigger via existing hooks (zero user effort default)
+
+**Stop hook** (after every assistant response, async non-blocking):
+- Every 10th response → invoke `memctl maintain` async
+- Internal scope decision via pressure
+- Logs to LOG.md
+
+**SessionStart hook** (every Claude Code session start):
+- Pre-session pressure check → if stale > 24h, run `memctl maintain` async
+- Non-blocking — bot session starts immediately, maintenance happens in background
+
+Default: ON. User effort = 0.
+
+### Manual surface (3 commands, escape hatch only)
 
 ```bash
-memctl maintain --check         # report pressure metrics + recommendation, no action
-memctl maintain --quick         # cheap ops: decay, cache rebuild, INDEX update
-memctl maintain --lint          # structural + semantic lint
-memctl maintain --full          # everything: consolidate + promote + lint + cache + synthesize
-memctl maintain --review        # interactive: process tentative_notes queue
+memctl maintain               # explicit run now (auto-scopes via pressure)
+memctl maintain --check       # dry-run: report what WOULD do, no action
+memctl maintain --force <scope>  # override: scope = quick|lint|full|synthesize|review
 ```
+
+Most users never type these — hooks handle everything. `--check` for curiosity. `--force` for power-user override.
+
+### Configuration (1 setting, default ON)
+
+```bash
+memctl config set maintenance.auto off    # disable hook auto-trigger (default: on)
+```
+
+If anh prefer 100% explicit (run only when typed), turn off.
 
 ### Surface to bot
 
