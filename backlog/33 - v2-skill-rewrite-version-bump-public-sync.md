@@ -21,7 +21,7 @@ updated: 2026-05-01
 
 Final child of epic #30. Rewrite skill + plugin docs để khớp V2 layout, bump csproj + plugin.json `1.2.0 → 1.3.0`, sync public memctl-releases (top-level SKILL.md + plugin source). Verify workflow `sync-marketplace` job ordering ensures plugin source push completes BEFORE marketplace bump (no race window where users fetch new marketplace.json pointing at unchanged plugin source).
 
-This child gates epic completion — once shipped, anh push tag `v1.3.0`, workflow auto-builds + auto-syncs marketplace + plugin source, end users `claude plugin update memctl@vdg-solutions` get V2 binary + V2 plugin source. Existing V1 vaults surface loud `legacy v1` warning (from #31) until user runs `memctl migrate-vault` (from #32).
+This child gates epic completion — once shipped, anh push tag `v1.3.0`, workflow auto-builds + auto-syncs marketplace + plugin source, end users `claude plugin update memctl@vdg-solutions` get V2 binary + V2 plugin source. **V2.1 is hard cutover** — no migrate-vault command (#32 archived). Existing V1 vaults must be manually relocated/wiped/re-init.
 
 ## Implementation
 
@@ -78,19 +78,26 @@ Memctl walks up from the cwd looking for `.memctl/` containing `.obsidian/`. Per
 
 To open the vault in Obsidian app: open `<project-anchor>/.memctl/` as the vault folder.
 
-## Migrate from V1 (pre-v1.3.0)
+## Upgrading from V1 (pre-v1.3.0)
 
-V1 placed `.obsidian/` and `.memctl/` as siblings at the project root, polluting the index with non-memory `.md` files (READMEs, docs/, src/). V2 fixes this. Migrate existing V1 vaults:
+**Hard cutover — no automatic migration.** If you have a V1 vault (`.obsidian/` + `.memctl/` siblings), do this manually:
 
 ```bash
-memctl migrate-vault --vault <V1-vault-path> --dry-run    # preview
-memctl migrate-vault --vault <V1-vault-path>              # copy notes to <vault>/.memctl-v2/
-memctl ingest --vault <V1-vault-path>/.memctl-v2          # rebuild index
-# verify notes are in .memctl-v2/
-# manually clean up V1 artifacts and rename .memctl-v2 -> .memctl
+# 1. Move V1 vault aside (preserve notes for manual recovery)
+mv <project>/.memctl <project>/.archived-v1-vault/.memctl
+mv <project>/.obsidian <project>/.archived-v1-vault/.obsidian
+
+# 2. Init fresh V2 vault
+memctl init --vault <project>
+
+# 3. (optional) Copy any .md notes from .archived-v1-vault/ into <project>/.memctl/
+cp <project>/.archived-v1-vault/*.md  <project>/.memctl/
+
+# 4. Rebuild index
+memctl ingest --vault <project>/.memctl
 ```
 
-V1 vault is read-only during migrate — safe to retry, no data loss.
+Add `.archived-v1-vault/` to `.gitignore` so old vault doesn't leak into commits.
 ```
 
 - Replace remaining session-protocol examples that reference vault paths.
@@ -116,16 +123,17 @@ Update auto-detect priority section to V2 markers:
 ```
 1. --vault <path> CLI flag
 2. Walk-up from cwd looking for `.memctl/` containing `.obsidian/`
-3. Walk-up legacy V1 (.obsidian/ + .memctl/ siblings) — surfaces "run memctl migrate-vault" warning
-4. error "no vault found"
+3. error "no vault found"
 ```
 
-### Step 3 — Update vault-isolation-runbook.md
+(V1 legacy detection dropped — V2.1 is hard cutover.)
+
+### Step 3 — Update memory-pipeline.md + vault-layout.md
 
 - **File MODIFY:** `backlog/wiki/memory-pipeline.md`
-- Section "Three-tier setup" → V2 examples (per-project default, personal global opt-in, team-shared advanced).
 - Drop "verified" claim about MEMCTL_VAULT — it was never wired in V1, may revisit in #29 after V2 lands.
-- Add "Migration from V1" section pointing at `memctl migrate-vault`.
+- Add "Upgrading from V1" section with manual `mv` instructions (no migrate-vault command — #32 archived).
+- **File MODIFY:** `backlog/wiki/vault-layout.md` — keep V2.1 layout authoritative, remove or simplify "Migration from V1" reference (drop migrate-vault link, replace with manual instructions).
 
 ### Step 4 — Sync skill to plugin
 
@@ -232,7 +240,7 @@ curl -sS https://raw.githubusercontent.com/vdg-solutions/memctl-releases/master/
 
 | ID | Criterion | Verify |
 |----|-----------|--------|
-| FR-1 | docs/memctl.md contains V2 layout diagram + migrate-vault instructions | `grep -c "Vault layout (V2" docs/memctl.md` returns 1; `grep -c "migrate-vault" docs/memctl.md` returns ≥2 |
+| FR-1 | docs/memctl.md contains V2.1 layout diagram + manual upgrade instructions | `grep -c "Vault layout (V2" docs/memctl.md` returns ≥1; `grep -c "\.archived-v1-vault" docs/memctl.md` returns ≥1 |
 | FR-2 | docs/memctl.md has 0 references to legacy `~/my-vault` or `.memctl-vault/` workaround patterns | `grep -cE "memctl init ~|\.memctl-vault" docs/memctl.md` returns 0 |
 | FR-3 | plugins/memctl-claude/README.md uses V2 init examples + drops `.memctl-vault/` | `grep -c "memctl init --vault \." plugins/memctl-claude/README.md` returns ≥1; `grep -c "\.memctl-vault" plugins/memctl-claude/README.md` returns 0 |
 | FR-4 | Skill synced — diff docs/memctl.md and plugin SKILL.md returns empty | `diff -q docs/memctl.md plugins/memctl-claude/skills/memctl/SKILL.md` exit 0 |
@@ -256,7 +264,7 @@ curl -sS https://raw.githubusercontent.com/vdg-solutions/memctl-releases/master/
 ## Dependencies
 
 - **Blocked by #31 (V2 foundation)** — docs reference V2 features that must exist in code first.
-- **Blocked by #32 (migrate-vault command)** — docs document migrate-vault; command must exist.
+- ~~Blocked by #32~~ — #32 ARCHIVED (no migrate-vault command).
 - **Blocked by #28 (workflow lockstep enforcement)** — version bump requires `verify-versions` job in workflow.
 
 ## Risk
@@ -266,14 +274,14 @@ curl -sS https://raw.githubusercontent.com/vdg-solutions/memctl-releases/master/
 | Manual public memctl-releases sync misses a file → users get partial V2 experience | Step 6 syncs 3 files explicitly (top SKILL.md, plugin README, plugin SKILL.md). Verify FR-6 + FR-7 confirm post-sync. Workflow auto-sync (release job) catches anything missed on next tag. |
 | Workflow `sync-marketplace` race condition (em flagged earlier) | Step 7 verifies `needs: release` ordering — sync-marketplace cannot start until release job (including plugin source push) completes. Mechanical grep confirms before tag. |
 | Version bump committed without skill+plugin docs sync → CI runs `verify-versions` for tag and passes, but plugin source on memctl-releases is stale | Step 5 + Step 4 + Step 6 all in single PR — atomic merge. PR checklist verifies all 3 done before merge. |
-| User on v1.2.x with V1 vault upgrades to v1.3.0 → loud warning fires (from #31) but user doesn't read warnings | Doc CHANGELOG entry for v1.3.0 leads with "BREAKING: vault layout changed. Run `memctl migrate-vault` to upgrade." Plugin README adds upgrade-from-1.2 section. README on memctl-releases also flagged. |
+| User on v1.2.x with V1 vault upgrades to v1.3.0 → vault won't resolve | Doc CHANGELOG entry for v1.3.0 leads with "BREAKING: vault layout changed (hard cutover). Manually relocate V1 vault — see README upgrade section." Plugin README + memctl-releases README both flagged. No automatic migration. |
 | Skill sync script creates trailing whitespace / line-ending diffs (Windows CRLF vs LF) | Em verifies skill sync via `diff -q` — exact byte match. Use `cp` (binary copy) not text rewrite. Existing `scripts/sync-skill-to-plugin.sh` already does `cp`. |
 | Public sync API call fails partway (3 files, 1 fails) → inconsistent state | Step 6 retries each file independently; failures logged via `%{http_code}`. User reruns just the failed file. |
 
 ## Effort
 
 ~3h:
-- 1h: rewrite docs/memctl.md V2 examples + migrate-vault section
+- 1h: rewrite docs/memctl.md V2.1 examples + manual upgrade section
 - 0.5h: rewrite plugin README + drop legacy patterns
 - 0.5h: update vault-isolation-runbook.md three-tier section
 - 0.25h: skill sync script + diff verify

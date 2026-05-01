@@ -361,3 +361,4 @@ tools/
 # Local Claude Code session artifacts
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+.archived-v1-vault/

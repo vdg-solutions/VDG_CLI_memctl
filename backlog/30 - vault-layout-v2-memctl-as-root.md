@@ -4,7 +4,7 @@ type: epic
 title: 'Vault layout V2 — .memctl/ as vault root container'
 status: Todo
 priority: high
-children: [31, 32, 33]
+children: [31, 33]
 tags:
   - epic
   - vault
@@ -45,7 +45,7 @@ Epic ships v1.3.0 (vault contract change). MEMCTL_SHARED_VAULT (#29) parked — 
 | # | Title | Scope | Effort |
 |---|-------|-------|--------|
 | #31 | VaultLocator V2 + Init refactor + path updates + legacy warning | Foundation: resolver, init, path computations, StatusOperator legacy warning (no migration yet — legacy vaults still resolve as `legacy v1`) | 4-5h |
-| #32 | Migration command — atomic rename + dry-run + idempotent + same-FS guard | Build on #31: `memctl migrate-vault` CLI, V1→V2 file moves with atomic safety, MigrationTests | 3-4h |
+| ~~#32~~ | ~~Migration command~~ | **ARCHIVED** — V2.1 is hard cutover per anh directive. No legacy V1 back-compat. Existing V1 vaults manually relocated/wiped. | — |
 | #33 | Skill rewrite + plugin README + isolation runbook + version bump 1.3.0 + sync | docs/memctl.md V2 examples, plugin README, runbook, sync-skill-to-plugin.sh, csproj+plugin version 1.3.0, API sync top-level SKILL.md + plugin source on public memctl-releases, verify workflow sync ordering | 3h |
 
 ## Epic-Level Acceptance Criteria

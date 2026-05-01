@@ -2,7 +2,8 @@
 id: 32
 type: task
 title: 'V2 migration — memctl migrate-vault reads V1 notes, copies to V2, leaves V1 untouched'
-status: Todo
+status: Archived
+archived_reason: 'Dropped per anh directive — V2.1 hard cutover, no legacy V1 back-compat needed. Dev V1 vault relocated to .archived-v1-vault/ (gitignored).'
 priority: high
 parent: 30
 tags:
