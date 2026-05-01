@@ -16,7 +16,7 @@ Push tag `v*` to private repo → workflow `.github/workflows/release.yml` runs 
 
 ---
 
-## Production release — manual steps (current state)
+## Production release — manual steps
 
 ### 1. Bump versions
 
@@ -51,18 +51,9 @@ git tag -a "v$NEW_VER" -m "v$NEW_VER"
 git push origin main "v$NEW_VER"
 ```
 
-### 5. Update marketplace.json (manual, until task #28 ships)
+### 5. Marketplace sync (automated)
 
-```bash
-PAT="<RELEASE_REPO_PAT>"
-SHA=$(curl -sS -H "Authorization: token $PAT" \
-  https://api.github.com/repos/vdg-solutions/claude-plugins/contents/.claude-plugin/marketplace.json \
-  | python -c "import sys,json; print(json.load(sys.stdin)['sha'])")
-
-# Edit marketplace.json plugin entry version=$NEW_VER, then PUT back with sha
-```
-
-After task #28 ships this is automated — workflow handles it.
+Handled by workflow `sync-marketplace` job — updates `vdg-solutions/claude-plugins/.claude-plugin/marketplace.json` plugin entry version. Skipped on pre-release tags (`v*-rc1`/`-beta1`/`-alpha`). No manual action needed.
 
 ### 6. Monitor workflow
 
@@ -135,15 +126,33 @@ git push origin "v$NEW_VER"
 `.github/workflows/release.yml` jobs:
 
 ```
-verify-versions (after #28 ships)
+verify-versions
     ↓
 build (matrix 3-platform AOT)
 pack-tool (dotnet pack nupkg)
     ↓
 release (gh release create on memctl-releases)
     ↓
-sync-marketplace (after #28; skipped on pre-release)
+sync-marketplace (skipped on pre-release tags)
 ```
+
+### verify-versions (fail-fast)
+
+Runs first, takes ~10s. Reads:
+- `GITHUB_REF_NAME` → strip `v` prefix → strip pre-release suffix after `-` → `BASE_VER`
+- `<Version>` from `src/memctl/memctl.csproj`
+- `version` from `plugins/memctl-claude/.claude-plugin/plugin.json`
+
+All three must equal `BASE_VER`. Mismatch → workflow fails immediately (no wasted matrix builds). Forces csproj/plugin lockstep release per task #27 NFR-3.
+
+### sync-marketplace (post-release)
+
+Runs after `release` job succeeds. Skipped via `if: !contains(github.ref_name, '-')` for pre-release tags. Updates plugin entry version in `vdg-solutions/claude-plugins/.claude-plugin/marketplace.json` via Contents API:
+1. GET marketplace.json (get sha)
+2. Decode base64, modify in-memory, re-encode
+3. PUT with sha (optimistic concurrency) + commit message `chore: bump memctl plugin to <version>`
+
+Failure isolated — does NOT roll back uploaded release artifacts. PAT scope or rate-limit issues only block marketplace update; users still get binaries.
 
 Trigger: `tags: ['v*']` or `workflow_dispatch` manual.
 
