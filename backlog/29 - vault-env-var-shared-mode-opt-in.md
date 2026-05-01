@@ -2,7 +2,7 @@
 id: 29
 type: task
 title: Vault MEMCTL_SHARED_VAULT env var — shared-mode opt-in (lowest priority)
-status: Todo
+status: In Progress
 priority: high
 tags:
 - vault
