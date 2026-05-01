@@ -6,23 +6,55 @@ This doc supersedes scattered references trong skill bodies + `_memctl-backend.m
 
 ---
 
-## §-1 Architectural primary: Mode B as default
+## §-1 Architectural primary: bot in session = the memory engine
 
-**When bot runs trong Claude Code session (`CLAUDECODE=1`), Mode B is the DEFAULT mechanism — not opt-in.** Bot in session = the LLM doing intelligence work for memory ops.
+Memory exists FOR LLM. **Assume LLM always available** — vault designed around bot in Claude Code session as primary actor. No-LLM standalone = edge case, not designed around.
 
-User effort = 0. User commands = 0. Bot natural-language conversation = the API.
+### Hook ↔ bot architecture (honest)
 
-Mode A (cheap regex/embedding ops) = fallback when bot session absent. Lower fidelity but vault stays functional.
+**Hooks do NOT invoke bot.** Hooks are external commands (Stop, SessionStart, UserPromptSubmit). Bot is LLM in chat session, acts only during user-prompt-response cycle.
 
-**Five guarantees of Mode B default:**
+Coordination via **bot-inbox pattern**:
 
-1. **No commands to remember.** Anh never types `memctl pin/archive/unarchive`. Bot does via natural language detection.
-2. **Bot self-corrects.** SessionStart audit reverses bot's own mistakes from prior session. No manual recovery.
-3. **Bot proactively volunteers.** Bot announces memory actions in conversation ("noting as ADR-0042"). Anh override via natural "no, don't archive that".
-4. **Confidence threshold prevents false positive.** 2-signal rule + bot semantic confirmation before persistent actions.
-5. **Token budget bounded.** ≤ 10% of session tokens spent on maintenance. Batched (per K=5 turns), async via Stop hook (non-blocking).
+```
+Hook fires (external)         Bot consumes (next user-prompt cycle)
+──────────────────            ─────────────────────────────────────
+Stop hook:                    UserPromptSubmit hook:
+  capture turn                  context-inject reads bot-todo.md
+  Tier 1 regex distill          if work-items pending:
+  Tier 2 embedding ops            inject as part of context
+  write bot-todo.md             bot sees pending work
+  (work-item: "review            in next response, bot:
+   tentative ADR-X for             reads flagged notes
+   confidence promotion")          decides nuanced action
+                                   writes via memctl add
+                                   clears bot-todo entry
+                                   announces in conversation
+```
 
-This pattern eliminates trade-offs em listed in earlier drafts. The only remaining cost = session tokens (capped); not $$, not user effort, not memory blind spots.
+Latency: next user-prompt cycle. Not real-time parallel — but anh's working session natural granularity.
+
+### Five operational guarantees
+
+1. **No commands.** Anh never types `memctl pin/archive`. Bot detects via natural language + executes inline.
+2. **Bot self-corrects.** Inbox includes audit work-items from SessionStart. Bot reviews, reverses mistakes naturally.
+3. **Bot proactive announces.** "Noting as ADR-0042" trong response. Anh override natural "no, scratch that".
+4. **Confidence threshold.** Hook-side regex creates `confidence-tentative` candidate. Bot in next response promotes to `confidence-proven` only if context confirms.
+5. **Token discipline by convention.** Maintenance work terse (1-2 lines per op, brief announcements). No hard cap (LLM can't measure own usage); discipline via brevity rule. Heavy ops batched to /qc-dream skill events.
+
+### Tier responsibility split
+
+| Tier | Actor | When |
+|------|-------|------|
+| **Tier 1 — regex/counter/math** | External hook commands (memctl CLI) | Real-time per-event |
+| **Tier 2 — embedding ops** | External hook commands (gemma model in process) | Real-time per-event |
+| **Tier 3 — LLM reasoning** | Bot in session via inbox pattern | Next user-prompt-response cycle |
+
+Vault works without bot (Tier 1+2 cover ~80% value). With bot (assumed default), Tier 3 catches up via inbox latency = next prompt.
+
+### Edge case: bot session absent
+
+If anh runs `memctl <cmd>` from CLI standalone (no Claude Code), Tier 3 work piles up in bot-todo. Next time anh open Claude Code, bot processes accumulated inbox in first response. No data loss; latency = "next session start".
 
 ---
 
@@ -615,9 +647,9 @@ Cost: ~1ms (stat + parse JSON). Negligible vs subcommand latency.
 
 Default: ALL paths ON. User effort = 0.
 
-### Bot proactive maintain (Mode B default)
+### Bot in-session maintain (default — assume LLM available)
 
-When bot runs inside Claude Code session (`CLAUDECODE=1` env detected — DEFAULT for normal usage), skill instruction wires bot to ALL maintenance ops, not just recommended.
+Bot in Claude Code session processes memory work via inbox pattern. Hooks coordinate (write work-items), bot consumes (next user-prompt-response cycle).
 
 **Skill rule (in `docs/memctl.md`):**
 
@@ -894,25 +926,30 @@ Most maintenance runs **WITHOUT LLM** (cheap, deterministic, free). LLM only req
 | Concept gap → rich page draft | ✅ opt-in | LLM writes initial draft if requested |
 | Disambiguation/merge nuanced | ✅ opt-in | Edge cases need LLM judgment |
 
-### Operating modes
+### Default operating model (LLM always available)
 
-**Mode B — Inside Claude Code session (DEFAULT, `CLAUDECODE=1`):**
-- Bot owns ALL memory ops end-to-end (per §-1 architectural primary)
-- Stop hook spawns bot post-processing for distill (nuanced, not regex)
-- SessionStart spawns bot self-audit + maintenance
-- Bot proactive announces memory actions in conversation
-- Anh natural-language override (no commands)
-- $0 external cost — bot IS the LLM
-- **Token budget:** ≤ 10% session tokens, batched per K=5 turns, async non-blocking
+Memory designed around bot in Claude Code session as primary actor. Per §-1, hooks and bot coordinate via inbox pattern.
 
-**Mode A — Fallback CLI (no Claude Code session):**
-- Cheap ops only (Tier 1 regex + Tier 2 embedding)
-- Tier 3 LLM ops degraded:
-  - Skipped (no LLM key) — emit `"skipped"` notice
-  - External LLM (when `--llm-url` configured) — calls cheap model (e.g. gemma 4B via VDG proxy, ~$0.05/100 notes)
-- Vault stays functional but lower fidelity
+**Default flow:**
+- Hooks (Stop, UserPromptSubmit, SessionStart) handle Tier 1 (regex/math) + Tier 2 (embedding) directly via external `memctl` CLI calls
+- Hooks write Tier 3 work-items to `<vault>/.obsidian/memctl/bot-todo.md`
+- Context-inject (UserPromptSubmit) reads bot-todo, includes pending items in prompt
+- Bot in next response performs Tier 3 work inline (alongside primary task), clears todo
+- Token discipline: bot keeps maintenance terse, batched per K=5 turns, brief announcements
+- $0 external cost — bot is the LLM
 
-Mode auto-detected by memctl via `CLAUDECODE` env var. User doesn't configure.
+**Edge case — no bot session (CLI standalone):**
+- Tier 3 work piles up in bot-todo
+- Tier 1+2 keep vault functional (~80% value)
+- Next session: bot processes accumulated inbox in first response
+- No data loss; latency = inbox depth at session resume
+
+**External LLM opt-in (rare):**
+- Set `memctl config llm.url <url> ...` if anh want hook-side Tier 3 work without waiting for bot
+- Calls cheap model (gemma 4B via VDG proxy, ~$0.05/100 notes)
+- Useful for: long unattended periods (e.g., overnight cron), or shared vault scenarios
+
+Default behavior: bot present, inbox-async pattern, $0.
 
 **Self-lint mode (explicit, anywhere):**
 - `memctl maintain --force lint --self` → memctl outputs all notes as structured prompt to stdout
@@ -996,12 +1033,14 @@ memctl maintain --check --report-recall
 ```
 
 Targets:
-- ≥ 0.7 hit rate after 1 month: protocol working
+- ≥ 0.7 hit rate after 6 months (first 6 months experimental — empirical data needed)
 - < 0.5 hit rate: ranking broken, needs re-tune
 - Layer 1 > 70% relevance: cache + scoring correct
 - Layer 3 < 50% used: most needs covered by passive surface (good)
 
 Anh check this metric quarterly. If bad → tune scoring weights, audit pressure thresholds, review tentative queue.
+
+**Calibration honesty:** Day-in-life §17 numbers (0.84 hit rate at year 1) là projection, not measured. First 6 months of real use = experimental. Targets above are heuristic from MemPalace/Karpathy literature, adjusted for memctl's hybrid scoring; require empirical validation.
 
 ---
 
