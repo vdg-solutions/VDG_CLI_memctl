@@ -41,7 +41,7 @@ claude plugin install memctl@vdg-solutions
 
 Restart Claude Code → hooks active in every session.
 
-## Init a vault
+## Init a vault (V2.1 layout, v1.3.0+)
 
 `memctl init` uses `--vault <path>` (NOT positional arg). PowerShell does NOT expand `~` — use `$HOME` or full path.
 
@@ -50,18 +50,22 @@ Restart Claude Code → hooks active in every session.
 ```powershell
 # In each project root
 cd C:\repos\my-project
-memctl init --vault .memctl-vault
-Add-Content .gitignore ".memctl-vault/"
+memctl init --vault .                    # creates .\.memctl\ as vault root
+Add-Content .gitignore ".memctl/"
 ```
 
 ```bash
 # Linux / macOS
 cd ~/repos/my-project
-memctl init --vault .memctl-vault
-echo ".memctl-vault/" >> .gitignore
+memctl init --vault .
+echo ".memctl/" >> .gitignore
 ```
 
-When you `cd` into the project, the plugin's hooks auto-detect this vault. Move to another project → that project's vault. **Filesystem-based isolation** — no env vars needed.
+`memctl init --vault <path>` creates `<path>/.memctl/` as the vault root container with V2.1 layout: `.obsidian/` config + 7 semantic subdirs (tasks/, patterns/, lessons/, decisions/, chats/, attachments/, claude-memory/) + nested runtime `.obsidian/memctl/` (auto-hidden by Obsidian).
+
+When you `cd` into the project, the plugin's hooks auto-detect the vault by walking up looking for `.memctl/` containing `.obsidian/`. Move to another project → that project's vault. **Filesystem-based isolation** — no env vars needed.
+
+To open the vault in Obsidian app: open `<project>/.memctl/` as the vault folder.
 
 ### Optional: personal global vault (cross-project notes)
 
@@ -69,34 +73,55 @@ For life decisions, code patterns reusable across all projects:
 
 ```powershell
 memctl init --vault $HOME\memctl-personal
-[Environment]::SetEnvironmentVariable('MEMCTL_VAULT', "$HOME\memctl-personal", 'User')
+# vault root = $HOME\memctl-personal\.memctl\
 ```
 
 ```bash
 memctl init --vault $HOME/memctl-personal
-echo 'export MEMCTL_VAULT="$HOME/memctl-personal"' >> ~/.bashrc
+# vault root = ~/memctl-personal/.memctl/
 ```
 
-Per-project vaults (when present) **always override** the global env var — sensitive projects stay isolated even with a global vault configured.
+Use `--vault` flag explicitly per-command, or `cd` into the personal vault dir to use it.
 
 ### Vault auto-detect priority
 
 ```
 1. --vault <path> CLI flag         (explicit)
-2. MEMCTL_VAULT env var            (global fallback)
-3. .memctl/ folder at cwd or any parent dir   (per-project)
-4. error "no vault found"
+2. Walk-up from cwd looking for .memctl/ containing .obsidian/   (per-project, V2.1)
+3. error "no vault found"
 ```
 
 Hooks call memctl WITHOUT `--vault` — they always go through the resolver, so scope follows the directory you `claude` in.
 
 ### Privacy guidance
 
-- **Sensitive project**: per-project vault + `.gitignore`. Don't set `MEMCTL_VAULT` if you don't want a global fallback.
+- **Sensitive project**: per-project vault + `.gitignore`. Filesystem isolation.
 - **Audit before launch**: `memctl status` → inspect `index_path` in JSON output. Confirms which vault is active.
 - **One-off without leaving traces**: `$env:MEMCTL_DISABLE_AUTOCAPTURE=1; $env:MEMCTL_DISABLE_AUTOINJECT=1` then launch claude.
 
-Full doc: [vault-isolation-runbook.md](https://github.com/vdg-solutions/memctl-releases/blob/master/SKILL.md) (or in source repo `docs/vault-isolation-runbook.md`).
+Full V2.1 layout doc: see plugin SKILL.md or source repo `docs/memctl.md`.
+
+## Upgrading from v1.2.x (V1 vault layout)
+
+**Hard cutover — no automatic migration.** V2.1 (v1.3.0+) requires fresh init. Manual upgrade per existing V1 vault:
+
+```powershell
+# Backup V1 vault
+mkdir <project>\.archived-v1-vault
+Move-Item <project>\.memctl   <project>\.archived-v1-vault\.memctl
+Move-Item <project>\.obsidian <project>\.archived-v1-vault\.obsidian
+
+# Init fresh V2 vault
+memctl init --vault <project>
+
+# Optional: copy notes from old root .md files
+Copy-Item <project>\.archived-v1-vault\*.md  <project>\.memctl\
+
+# Rebuild index
+memctl ingest --vault <project>\.memctl
+```
+
+Add `.archived-v1-vault/` to `.gitignore`. V1 vault preserved for manual recovery.
 
 ## Disable individual hooks
 
@@ -121,9 +146,9 @@ export MEMCTL_ALLOW_DEBUG=1           # allow debugger attach (memctl --version 
 
 **Hooks not firing:** restart Claude Code after install. Verify `memctl` is on `PATH` (`which memctl`).
 
-**Vault not detected:** plugin walks up from cwd looking for `.memctl/` or `.memctl-vault/`. `cd` into a project that has been `memctl init --vault .memctl-vault`'d, or set `MEMCTL_VAULT` env var as a global fallback.
+**Vault not detected:** plugin walks up from cwd looking for `.memctl/` containing `.obsidian/` (V2.1 marker pair). `cd` into a project that has been `memctl init --vault .`'d.
 
-**Wrong vault active (cross-project leak risk):** run `memctl status` and check `index_path` in the JSON output. If it points at the global vault while you're working on a sensitive project, run `memctl init --vault .memctl-vault` in the project root first. See vault-isolation-runbook.md.
+**Wrong vault active (cross-project leak risk):** run `memctl status` and check `index_path` in the JSON output — confirms which `.memctl/` is active. Project-level `.memctl/` always wins via walk-up.
 
 **Capture is slow:** `memctl capture` filters short turns + skips tool-call-only turns. If still slow, check `~/.claude/logs/` for hook output.
 

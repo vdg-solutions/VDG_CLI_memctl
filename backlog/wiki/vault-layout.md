@@ -117,8 +117,8 @@ Body content here. Wikilinks [[other-note]] supported. Obsidian renders.
 
 V1 placed `.obsidian/` and `.memctl/` as siblings at vault root, polluting index with non-memory `.md` files. V2.1 fixes this. See:
 
-- [migration-v1-to-v2.md](migration-v1-to-v2.md) — step-by-step user guide
-- Backlog #32 — `memctl migrate-vault` command (read-and-copy approach)
+- See `docs/memctl.md` "Upgrading from V1" section — manual `mv .obsidian + .memctl → .archived-v1-vault/` then fresh `memctl init`.
+- Backlog #32 ARCHIVED — V2.1 is hard cutover, no automated migration.
 
 ---
 
