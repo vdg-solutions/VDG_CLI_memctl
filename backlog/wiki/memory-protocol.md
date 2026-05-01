@@ -473,39 +473,63 @@ Default λ=0.7 (favor relevance). Prevents 5 dupes of same topic in surfaced top
 | **Negative recall** | Include `hall-decision-against`/`rejected` tagged notes | Default include |
 | **Disambiguation** | Multiple matches same topic → list with id+title+date+confidence | When Layer 2 returns >1 strong match |
 
-### Smart retrieval extensions (embedding-only, $0, default ON)
+### Smart retrieval extensions (embedding-only, $0)
 
-Hot path retrieval enhanced với techniques có empirical evidence proven trên niche personal corpora. All free (gemma 300M already loaded).
+Hot path retrieval enhanced với 5 independent signals (PRF, multi-vector, cluster routing, wikilink anchor, PageRank). All free (gemma 300M already loaded).
+
+**Execution order (deterministic):**
+```
+1. Cluster routing (#4) — narrow scope
+2. Hybrid search BM25 + semantic (baseline)
+3. PRF rerank (#1) — only if top-3 max sim ≥ 0.6 (drift guard)
+4. PageRank boost (#7) — score × (1 + 0.15 × log(in_degree+1)) × exp(-age_days/180)  ← recency-clamped
+5. Wikilink anchor expansion (#6) — only if median(in_degree) ≥ 2 (sparse-graph guard)
+6. Confidence/recency rerank (existing baseline §6.0)
+```
 
 | # | Technique | Cost | Quality gain | Default | Evidence |
 |---|-----------|------|--------------|---------|----------|
-| 1 | **PRF (pseudo-relevance feedback)** — top-3 → centroid → re-search | +10ms | ~10-15% | ON | Decades of IR research; reliable on niche corpora |
-| 2 | **Multi-vector chunk embedding** — embed paragraphs separately, max-sim aggregation | +ingest 3-5×, search same | ~10-20% | ON (post-#35) | ColBERT family proven on dense retrieval |
-| 3 | **Query expansion via NN** — embed query → top-5 nearest notes → extract their TF-IDF terms → expand BM25 query | +15ms | ~15% (synonym coverage) | ON | Vault IS the dictionary — domain-aware |
-| 4 | **Cluster routing** — pre-computed K=20 topic centroids, route query to nearest cluster, narrow scope | +1ms | ~30-50% latency reduction + relevance | ON | Standard ANN/coarse-grained partitioning |
-| 5 | **Identity-aware ranking** — boost notes semantically similar to identity note | +0.1ms/note | ~10% personalization | ON | Embedding personalization standard |
-| 6 | **Wikilink anchor expansion** — top-1 hit → 1-hop wikilink neighbors added to result set | +5ms | ~10-15% (multi-aspect queries) | ON | Karpathy llm-wiki "associative trails"; graph already in index.db |
-| 7 | **PageRank centrality boost** — `score × (1 + 0.15 × log(in_degree + 1))` | +0.1ms (in_degree precomputed cold) | ~5-10% (canonical surfacing) | ON | Standard graph IR; pre-computed quarterly |
-| 8 | **Subgraph clustering** — top-3 hits BFS — if connected via wikilinks, include connecting hubs | +10ms (2-3 graph queries) | ~5-15% (cohesive context) | ON | Niche but cheap; graph is curated signal |
+| 1 | **PRF (pseudo-relevance feedback)** — top-3 → centroid → re-search | +10ms | ~10-15% | ON | Decades of IR research; reliable niche corpora. Drift guard: skip if max sim < 0.6 |
+| 2 | **Multi-vector chunk embedding** — embed paragraphs separately, max-sim aggregation | +ingest 3-5×, search +K×N max-sim ops (slower than single-vector cosine) | ~10-20% (vault ≥500 notes) | ON for vault ≥100 notes; OFF below | ColBERT family on dense retrieval; marginal on small vaults |
+| 4 | **Cluster routing** — pre-computed K=20 topic centroids, route query to nearest cluster, narrow scope | +1ms | latency: 30-50% reduction (vault ≥500), 0% (<500); relevance neutral-to-+5% | ON for vault ≥500; OFF below | ANN/IVF coarse partitioning |
+| 6 | **Wikilink anchor expansion** — top-1 hit → 1-hop wikilink neighbors added | +5ms | ~10-15% (dense graph), 0% (sparse) | ON if median in_degree ≥ 2; else OFF | Karpathy llm-wiki "associative trails"; graph already in index.db |
+| 7 | **PageRank centrality boost** — `score × (1 + 0.15 × log(in_degree+1)) × exp(-age_days/180)` | +0.1ms (precomputed cold) | ~5-10% (canonical surfacing) | ON | Standard graph IR + recency clamp avoid stale-hub bias |
 
-Stack all 8 = ~50-60% improvement over vanilla BM25+semantic on niche personal corpus. $0. All embedding + wikilink graph based.
+**Realistic stacked gain (5 independent signals, niche corpus, high variance):**
+
+| Vault size | Active techniques | Realistic gain |
+|------------|-------------------|----------------|
+| <100 notes | PRF + PageRank | ~5-10% (most marginal) |
+| 100-500 | PRF + PageRank + multi-vector + wikilink (if dense) | ~15-25% |
+| 500-2000 | All 5 | ~25-35% |
+| >2000 | All 5 | ~30-40% |
+
+NOT a 50-60% bundle. Marketing inflation gets caught at QC.
 
 **Why wikilink graph valuable:**
-- Vault is curated knowledge base — links are intentional (anh + bot create deliberately)
-- Unlike public web, vault graph is clean signal (no SEO spam, no link farms)
+- Vault is curated knowledge base — links intentional (anh + bot create deliberately)
+- Unlike public web, vault graph clean signal (no SEO spam, no link farms)
 - ADRs/lessons reference each other naturally → graph encodes "this concept relates to that"
 - Karpathy llm-wiki philosophy: cross-references = first-class data
+- Sparse-graph guard prevents silent zero-gain on fresh vaults
 
-**Honest caveat:** smart retrieval gains have **mixed empirical evidence on niche personal corpora** (vs public benchmark dataset numbers). Target recall hit rate 0.7 achievable with baseline + PRF + wikilink anchor + cluster routing alone (top techniques 1+4+6). Other techniques marginal refinement.
+**Honest caveats:**
+- Empirical gains mixed on niche personal corpora (vs public benchmark)
+- Each technique has failure mode → guards mandatory (drift threshold, recency clamp, sparse-graph skip, vault-size gate)
+- Order of composition matters → deterministic pipeline mandated above
+- Recall hit rate 0.7 baseline target achievable with PRF + PageRank + wikilink anchor alone on dense vault
 
-### NOT in default — speculative techniques
+### NOT in default — speculative or overlapping
 
 | Technique | Why NOT default |
-|-----------|----------------|
-| **HyDE (Hypothetical Document Embeddings)** | Original paper (Gao et al. 2022) shows ~5-10% gain on PUBLIC benchmarks (BEIR/TREC-DL). Replications on niche corpora MIXED — sometimes worse. LLM hallucinates facts not in corpus → embed misleading vector. PRF achieves similar gain without LLM cost. **Skip.** |
-| **LLM cross-encoder rerank** | Speculative on niche corpus. Bot-in-session can do equivalent naturally if surface insufficient. |
-| **Late interaction (ColBERT full)** | Implementation cost high; multi-vector chunk (above) is lighter approximation. |
-| **Knowledge graph (Neo4j)** | High setup; existing wikilink graph + search-links covers 80% value. |
+|-----------|-----------------|
+| **#3 Query expansion via NN (vault TF-IDF)** | ~60% signal overlap with PRF (#1). Double-count. Demoted: opt-in only nếu PRF drift consistently. |
+| **#5 Identity-aware ranking** | Speculative — no benchmark. Risk: suppress legitimately divergent notes. May add post-#35 if A/B shows benefit. |
+| **#8 Subgraph clustering (Steiner-tree-ish)** | Most speculative. PageRank + anchor expansion cover 80% value. Skip until measured win. |
+| **HyDE (Hypothetical Document Embeddings)** | Gao et al. 2022 ~5-10% on public benchmarks. Niche corpora MIXED. LLM hallucinates → misleading vector. PRF achieves similar without LLM cost. Skip. |
+| **LLM cross-encoder rerank** | Bot-in-session does equivalent naturally if surface insufficient. |
+| **Late interaction (ColBERT full)** | Impl cost high; multi-vector chunk lighter approximation. |
+| **Knowledge graph (Neo4j)** | Existing wikilink graph + search-links covers 80%. |
 
 ### Bot active recall (Tier 3 — surface insufficient)
 
