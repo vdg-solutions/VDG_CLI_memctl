@@ -291,6 +291,15 @@ Manual checklist (lưu thành `plugins/memctl-claude/SMOKE.md`):
 - Plugin `version` bump cần khớp `memctl.csproj` version để debug compatibility dễ hơn — NFR-3 enforce.
 - Future: thêm `PreToolUse` hook để auto-boost weight cho file bot vừa edit (signal-of-importance).
 
+## Publish & propagation
+
+**Read `docs/plugin-publish-runbook.md` BEFORE editing this plugin or building a new one.** Critical points discovered after first install attempt:
+
+- This source repo is private → Claude Code cannot clone it for plugin install.
+- Plugin source must mirror to **public** `vdg-solutions/memctl-releases/plugins/memctl-claude/` for `claude plugin install memctl@vdg-solutions` to work.
+- `marketplace.json` `source` field must be object `{source: "git-subdir", url, path, ref}`, NOT legacy string `"github:owner/repo"` (Claude Code 2.1+ rejects string with "unsupported source type").
+- Auto-sync on tag: `.github/workflows/release.yml` release job last step clones `memctl-releases`, copies `plugins/memctl-claude/`, pushes — handles tag-driven propagation. Mid-release iteration without a tag requires manual sync (see runbook).
+
 ## Comments
 
 **2026-05-01 07:07 user:** Plugin shipped. Marketplace live at https://github.com/vdg-solutions/claude-plugins. Plugin source: plugins/memctl-claude/ in this repo (auto-synced to marketplace via release pipeline future). Install: claude plugin marketplace add vdg-solutions/claude-plugins && claude plugin install memctl@vdg-solutions. AC: FR-1..10 + NFR-1..3 verified mechanical. FR-11 (E2E smoke on clean Claude Code install) deferred to user manual run per SMOKE.md.
