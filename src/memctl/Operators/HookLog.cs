@@ -7,13 +7,13 @@ internal static class HookLog
     private const int MaxLines = 1000;
 
     internal static string LogPath(string vaultPath) =>
-        Path.Combine(vaultPath, ".memctl", "hook.log");
+        Path.Combine(vaultPath, ".obsidian", "memctl", "hook.log");
 
     internal static void Record(string vaultPath, string action, bool success, string? error)
     {
         try
         {
-            var dir = Path.Combine(vaultPath, ".memctl");
+            var dir = Path.Combine(vaultPath, ".obsidian", "memctl");
             Directory.CreateDirectory(dir);
             var path = LogPath(vaultPath);
             var line = $"{DateTime.UtcNow:O}\t{action}\t{(success ? "ok" : "fail")}\t{error?.Replace('\t', ' ').Replace('\n', ' ') ?? ""}";

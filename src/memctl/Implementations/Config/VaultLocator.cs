@@ -14,9 +14,8 @@ public static class VaultLocator
     public static string? FindVaultFrom(string startDir)
         => Discover(null, startDir).Vault;
 
-    /// Same walk-up algorithm but also returns the search path, strategy,
-    /// and the full list of paths checked. Used to surface debug context to
-    /// Claude Code when memory looks empty.
+    /// V2.1 resolver: walk-up looks for `<dir>/.memctl/` containing `.obsidian/` (V2 marker pair).
+    /// Returns vault path = path of `.memctl/` itself (vault root container).
     public static VaultDiscovery Discover(string? explicitPath, string searchPath)
     {
         if (explicitPath is not null)
@@ -27,13 +26,16 @@ public static class VaultLocator
         while (true)
         {
             checkedPaths.Add(dir);
-            if (Directory.Exists(Path.Combine(dir, ".obsidian")))
-                return new VaultDiscovery(Path.GetFullPath(dir), searchPath, "walk-up from cwd", checkedPaths);
+
+            var v2Vault = Path.Combine(dir, ".memctl");
+            if (Directory.Exists(v2Vault) && Directory.Exists(Path.Combine(v2Vault, ".obsidian")))
+                return new VaultDiscovery(Path.GetFullPath(v2Vault), searchPath, "walk-up v2 (.memctl/)", checkedPaths);
 
             var parent = Directory.GetParent(dir);
-            if (parent is null)
-                return new VaultDiscovery(null, searchPath, "walk-up from cwd", checkedPaths);
+            if (parent is null) break;
             dir = parent.FullName;
         }
+
+        return new VaultDiscovery(null, searchPath, "walk-up v2", checkedPaths);
     }
 }

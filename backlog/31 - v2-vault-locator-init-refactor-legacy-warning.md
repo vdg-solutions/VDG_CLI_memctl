@@ -1,15 +1,15 @@
 ---
 id: 31
 type: task
-title: 'V2 foundation — VaultLocator + Init refactor + path updates + loud legacy warning'
-status: Todo
+title: V2 foundation — VaultLocator + Init refactor + path updates + loud legacy warning
+status: In Progress
 priority: high
 parent: 30
 tags:
-  - vault
-  - layout-v2
-  - resolver
-  - foundation
+- vault
+- layout-v2
+- resolver
+- foundation
 created: 2026-05-01
 updated: 2026-05-01
 ---
