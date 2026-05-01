@@ -122,7 +122,7 @@ Update auto-detect priority section to V2 markers:
 
 ### Step 3 — Update vault-isolation-runbook.md
 
-- **File MODIFY:** `docs/vault-isolation-runbook.md`
+- **File MODIFY:** `backlog/wiki/memory-pipeline.md`
 - Section "Three-tier setup" → V2 examples (per-project default, personal global opt-in, team-shared advanced).
 - Drop "verified" claim about MEMCTL_VAULT — it was never wired in V1, may revisit in #29 after V2 lands.
 - Add "Migration from V1" section pointing at `memctl migrate-vault`.
@@ -240,7 +240,7 @@ curl -sS https://raw.githubusercontent.com/vdg-solutions/memctl-releases/master/
 | FR-6 | Public memctl-releases SKILL.md (top-level) reflects V2 examples | `curl -sS https://raw.githubusercontent.com/vdg-solutions/memctl-releases/master/SKILL.md \| grep -c "\.memctl/"` returns ≥3 |
 | FR-7 | Public memctl-releases plugin source README synced | `curl -sS https://raw.githubusercontent.com/vdg-solutions/memctl-releases/master/plugins/memctl-claude/README.md \| grep -c "memctl init --vault \."` returns ≥1 |
 | FR-8 | Workflow ordering: sync-marketplace `needs: release` AND release job contains "Sync plugin source" step | mechanical grep checks in Step 7 both pass |
-| FR-9 | docs/vault-isolation-runbook.md "Three-tier setup" updated to V2 | `grep -c "Vault layout (V2" docs/vault-isolation-runbook.md` returns ≥1 |
+| FR-9 | backlog/wiki/memory-pipeline.md "Three-tier setup" updated to V2 | `grep -c "Vault layout (V2" backlog/wiki/memory-pipeline.md` returns ≥1 |
 | NFR-1 | Build clean: 0 warning, 0 error | `dotnet build -c Release --nologo -v q 2>&1 \| grep -cE "warning\|error"` returns 0 |
 | NFR-2 | All 57 tests still pass (no regression from #31+#32) | `dotnet test --nologo` "Passed: 57" |
 | NFR-3 | No new test files added in this child (docs+version only) | `git diff main..HEAD --name-only \| grep -c "tests/.*Tests.cs"` returns 0 |

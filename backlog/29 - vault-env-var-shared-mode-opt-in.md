@@ -16,7 +16,7 @@ updated: 2026-05-01
 
 ## Description
 
-`docs/vault-isolation-runbook.md` + `plugins/memctl-claude/README.md` đã document `MEMCTL_SHARED_VAULT` env var như thể đã work — nhưng `src/memctl/Implementations/Config/VaultLocator.cs:20` chỉ implement (a) explicit `--vault` flag (b) `.obsidian/` walk-up. Env var support chưa wired. Doc/code mismatch — bot/user đọc doc sẽ set env var và confused why nó không work.
+`backlog/wiki/memory-pipeline.md` + `plugins/memctl-claude/README.md` đã document `MEMCTL_SHARED_VAULT` env var như thể đã work — nhưng `src/memctl/Implementations/Config/VaultLocator.cs:20` chỉ implement (a) explicit `--vault` flag (b) `.obsidian/` walk-up. Env var support chưa wired. Doc/code mismatch — bot/user đọc doc sẽ set env var và confused why nó không work.
 
 User intent rõ: per-project vault là default (đã đúng — walk-up `.obsidian/`); muốn share vault giữa projects → đặt env var explicit. Task này wire env var với priority THẤP NHẤT (sau walk-up) để per-project override env var khi cả hai cùng tồn tại — đảm bảo sensitive project vault bao giờ cũng thắng.
 
@@ -181,14 +181,14 @@ public class VaultLocatorEnvVarTests : IDisposable
 
 ### Step 3 — Sync existing docs to actual behavior
 
-- **File MODIFY:** `docs/vault-isolation-runbook.md` — replace "verified" claim about env var (currently misleading — claim was made before code support landed). Add note: "MEMCTL_SHARED_VAULT support landed in v1.2.1+ via task #29." Keep priority order as-is (already matches new code).
+- **File MODIFY:** `backlog/wiki/memory-pipeline.md` — replace "verified" claim about env var (currently misleading — claim was made before code support landed). Add note: "MEMCTL_SHARED_VAULT support landed in v1.2.1+ via task #29." Keep priority order as-is (already matches new code).
 - **File MODIFY:** `plugins/memctl-claude/README.md` — same correction. Note version requirement.
 - **File MODIFY:** `plugins/memctl-claude/.claude-plugin/plugin.json` — bump `version` 1.2.0 → 1.2.1 to match next csproj bump (NFR-3 task #28 verify-versions enforces).
 - **File MODIFY:** `src/memctl/memctl.csproj` — bump `<Version>` 1.2.0 → 1.2.1 (release-coupled with this feature).
 
 ### Step 4 — Re-sync plugin source to public release host
 
-After private repo merge, propagate to `vdg-solutions/memctl-releases/plugins/memctl-claude/README.md` (Contents API PUT). Manual until next tag push triggers workflow auto-sync. Documented in `docs/plugin-publish-runbook.md` mid-release flow.
+After private repo merge, propagate to `vdg-solutions/memctl-releases/plugins/memctl-claude/README.md` (Contents API PUT). Manual until next tag push triggers workflow auto-sync. Documented in `backlog/wiki/plugin-publish.md` mid-release flow.
 
 ### Step 5 — Build + test verify
 

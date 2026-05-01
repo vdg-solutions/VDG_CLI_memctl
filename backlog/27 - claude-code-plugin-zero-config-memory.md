@@ -293,7 +293,7 @@ Manual checklist (lưu thành `plugins/memctl-claude/SMOKE.md`):
 
 ## Publish & propagation
 
-**Read `docs/plugin-publish-runbook.md` BEFORE editing this plugin or building a new one.** Critical points discovered after first install attempt:
+**Read `backlog/wiki/plugin-publish.md` BEFORE editing this plugin or building a new one.** Critical points discovered after first install attempt:
 
 - This source repo is private → Claude Code cannot clone it for plugin install.
 - Plugin source must mirror to **public** `vdg-solutions/memctl-releases/plugins/memctl-claude/` for `claude plugin install memctl@vdg-solutions` to work.

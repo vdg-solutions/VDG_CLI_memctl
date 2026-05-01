@@ -2,7 +2,7 @@
 
 How to push the `memctl` Claude Code plugin from this private source repo to the public marketplace where Claude Code can install it.
 
-Cross-references: backlog/27 (plugin scaffold), backlog/28 (release pipeline automation), docs/release-runbook.md (full release SOP).
+Cross-references: backlog/27 (plugin scaffold), backlog/28 (release pipeline automation), backlog/wiki/release-runbook.md (full release SOP).
 
 ---
 
@@ -107,7 +107,7 @@ Any backlog item building a Claude Code plugin MUST include:
 1. Public source repo confirmation (don't put plugin in a private-only repo without a public mirror).
 2. `marketplace.json` snippet using object source format (NOT string).
 3. Workflow step or runbook reference for source sync on release.
-4. Pointer to this runbook (`docs/plugin-publish-runbook.md`).
+4. Pointer to this runbook (`backlog/wiki/plugin-publish.md`).
 
 If a plugin task is missing any of these, treat as design gap — fix the task before /sdlc.
 

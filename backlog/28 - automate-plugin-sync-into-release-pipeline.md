@@ -114,7 +114,7 @@ Goal: tag `v*` push → tất cả version bumps tự đồng bộ. User không 
 
 ### Step 3 — Document version bump runbook
 
-- **File MODIFY:** `docs/release-runbook.md` — replace Step 5 manual marketplace update block with "automated by workflow #28" pointer; replace "after task #28 ships" forward-references with "as of v1.x.y" past-tense; add new section "Workflow internals — verify-versions + sync-marketplace job chain" describing the 2 new jobs.
+- **File MODIFY:** `backlog/wiki/release-runbook.md` — replace Step 5 manual marketplace update block with "automated by workflow #28" pointer; replace "after task #28 ships" forward-references with "as of v1.x.y" past-tense; add new section "Workflow internals — verify-versions + sync-marketplace job chain" describing the 2 new jobs.
 
 ### Step 4 — Smoke test
 
@@ -182,7 +182,7 @@ git push origin main v1.2.3
 - 1h: sync-marketplace job + Python json patcher
 - 0.5h: pin new actions to SHA
 - 1h: smoke test (positive + negative case)
-- 0.5h: docs/release-runbook.md update — automated steps section
+- 0.5h: backlog/wiki/release-runbook.md update — automated steps section
 - 0.5h: edge case testing — pre-release tag skip, missing PAT scope
 
 ## User Actions Required
@@ -192,7 +192,7 @@ git push origin main v1.2.3
 ## Notes
 
 - Workflow chỉ sync forward (marketplace ← memctl-releases). Reverse direction (marketplace edited manually → memctl-releases catches up) NOT supported. Single source of truth: csproj + plugin.json in this repo.
-- Sister task — `docs/release-runbook.md` documents end-to-end manual + automated release steps for future bot context.
+- Sister task — `backlog/wiki/release-runbook.md` documents end-to-end manual + automated release steps for future bot context.
 
 ## Comments
 
