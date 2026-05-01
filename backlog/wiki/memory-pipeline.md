@@ -28,7 +28,7 @@ Claude Code: trigger UserPromptSubmit hook
        ▼
 memctl context-inject   (binary)
        │
-       │ 1. VaultLocator walk-up cwd → .memctl/.obsidian/ → vault path
+       │ 1. VaultLocator: walk-up cwd → .memctl/.obsidian/ → vault path; fallback MEMCTL_SHARED_VAULT (v1.3.1+)
        │ 2. extract keywords từ prompt (lowercase, dedupe, filter stopwords)
        │ 3. .obsidian/memctl/index.db query:
        │      • semantic search (embeddings cosine sim) top 6
@@ -188,6 +188,17 @@ Read-side: index.db consolidates all `.md` (excluding `.obsidian/`). Write-side:
 See [vault-layout.md](vault-layout.md) for full layout + writer ownership matrix.
 
 ---
+
+## Vault resolver priority (v1.3.1+)
+
+```
+1. --vault <path> CLI flag                                       (explicit)
+2. Walk-up cwd → <dir>/.memctl/.obsidian/                        (per-project, V2.1)
+3. MEMCTL_SHARED_VAULT env var → <env>/.obsidian/                (shared opt-in)
+4. null vault — caller errors
+```
+
+Per-project always wins over env var. Sensitive vault never leaks.
 
 ## Hook control (env vars)
 

@@ -86,12 +86,20 @@ Use `--vault` flag explicitly per-command, or `cd` into the personal vault dir t
 ### Vault auto-detect priority
 
 ```
-1. --vault <path> CLI flag         (explicit)
+1. --vault <path> CLI flag                                       (explicit)
 2. Walk-up from cwd looking for .memctl/ containing .obsidian/   (per-project, V2.1)
-3. error "no vault found"
+3. MEMCTL_SHARED_VAULT env var pointing at vault root            (shared opt-in, v1.3.1+)
+4. error "no vault found"
 ```
 
 Hooks call memctl WITHOUT `--vault` — they always go through the resolver, so scope follows the directory you `claude` in.
+
+**Shared vault opt-in (v1.3.1+):** set `MEMCTL_SHARED_VAULT=<path>` where `<path>/.obsidian/` exists. Used only when walk-up exhausts — per-project vault always wins. Lets you have a personal global fallback without forcing every cwd to host one.
+
+```bash
+export MEMCTL_SHARED_VAULT=$HOME/memctl-personal/.memctl    # Linux/macOS
+$env:MEMCTL_SHARED_VAULT="$HOME\memctl-personal\.memctl"   # Windows PowerShell
+```
 
 ### Privacy guidance
 
