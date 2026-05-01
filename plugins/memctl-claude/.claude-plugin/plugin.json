@@ -1,0 +1,12 @@
+{
+  "name": "memctl",
+  "version": "1.2.0",
+  "description": "Zero-config persistent memory for Claude Code — auto-capture, auto-inject, vault-backed",
+  "author": {
+    "name": "vdg-solutions",
+    "url": "https://github.com/vdg-solutions/memctl-releases"
+  },
+  "homepage": "https://github.com/vdg-solutions/memctl-releases",
+  "license": "MIT",
+  "keywords": ["memory", "vault", "obsidian", "context", "persistence"]
+}
