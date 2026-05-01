@@ -81,3 +81,19 @@
 - Fix: Replace `$x = expr ?? ""` with `$raw = expr; $x = if ($null -ne $raw) { $raw } else { "" }`
 - Hit count: 1
 - Source: retro analysis task #5
+
+### [2026-05-01] — pat_scope_insufficient_for_pr_create (from retro 28)
+- Severity: low
+- Triggers: [pat, gh pr create, 403, sdlc, fallback, github-permissions]
+- Pattern: PAT issued with minimal Contents:Write + Metadata:Read lacks Pull Requests scope, causing /sdlc phase 5 PR creation to 403. Fallback to local merge per /sdlc skill rule, but PR review record is lost.
+- Fix: When issuing PAT for SDLC autonomous flow, include Pull Requests:Read+Write scope by default. Document scope ladder in docs/release-runbook.md PAT rotation section.
+- Hit count: 1
+- Source: retro analysis #28
+
+### [2026-05-01] — workflow_yaml_change_qc_static_only (from retro 28)
+- Severity: low
+- Triggers: [workflow, github-actions, yaml, qc, smoke, real-run]
+- Pattern: Workflow YAML changes pass mechanical AC grep + python yaml.safe_load but real GHA runtime semantics (if: evaluator on tag string, needs: ordering) only verified by actual workflow execution. Mechanical-only QC is necessary but not sufficient.
+- Fix: For workflow YAML changes, schedule a real-tag smoke run as post-merge verification. Or use workflow_dispatch with a test ref to validate non-tag-driven paths.
+- Hit count: 1
+- Source: retro analysis #28

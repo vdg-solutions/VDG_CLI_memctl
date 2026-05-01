@@ -1,15 +1,15 @@
 ---
 id: 28
 type: task
-title: 'Automate plugin sync — release workflow updates marketplace + bumps versions'
-status: Todo
+title: Automate plugin sync — release workflow updates marketplace + bumps versions
+status: Done
 priority: medium
 tags:
-  - ci
-  - release
-  - automation
-  - plugin
-  - marketplace
+- ci
+- release
+- automation
+- plugin
+- marketplace
 created: 2026-05-01
 updated: 2026-05-01
 ---
@@ -193,3 +193,11 @@ git push origin main v1.2.3
 
 - Workflow chỉ sync forward (marketplace ← memctl-releases). Reverse direction (marketplace edited manually → memctl-releases catches up) NOT supported. Single source of truth: csproj + plugin.json in this repo.
 - Sister task — `docs/release-runbook.md` documents end-to-end manual + automated release steps for future bot context.
+
+## Comments
+
+**2026-05-01 07:34 user:** Phase 1 complete: Spec at docs/specs/28-spec.md
+
+**2026-05-01 07:36 user:** Phase 2 complete: Design at docs/designs/28-design.md
+
+**2026-05-01 07:49 user:** Pipeline complete. Merged to main (a47ec2f). 0 QC loops, 9/9 AC pass, self-review APPROVE. PR phase fell back to local merge (PAT lacks Pull Requests scope). Retro at docs/retros/28-retro.md. Memory consolidated via qc-dream — 2 new error patterns + 2 insights logged.

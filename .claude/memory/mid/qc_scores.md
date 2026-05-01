@@ -16,3 +16,5 @@
 | 2026-04-19 | Review 13 | — | — | 4.8/5 | — | APPROVE |
 | 2026-04-19 | #9 G4 fetch | PASS | PASS | 5.0/5 | 4.9/5 | 0 |
 | 2026-04-19 | Review 9 | — | — | 4.9/5 | — | APPROVE |
+| 2026-05-01 | #28 plugin sync workflow | PASS | PASS (static-only) | 5.0/5 | 5.0/5 | 0 |
+| 2026-05-01 | Review 28 | — | — | 4.5/5 (inline) | — | APPROVE (PR fallback to local merge) |
