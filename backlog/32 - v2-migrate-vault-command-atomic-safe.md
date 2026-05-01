@@ -17,13 +17,25 @@ updated: 2026-05-01
 
 ## Description
 
-Second child of epic #30. Build on #31's V2 resolver. Add `memctl migrate-vault --vault <V1-path>` CLI command that creates V2 layout by **reading each .md note from V1 vault and writing to V2 destination** — V1 source untouched, no atomic-rename complexity, naturally cross-volume safe, reversible by definition.
+Second child of epic #30. Build on #31's V2.1 resolver + InitVaultStructure. Add `memctl migrate-vault --vault <V1-path>` CLI command that creates V2.1 layout by **reading each .md note from V1 vault and writing to V2 destination** — V1 source untouched, no atomic-rename complexity, naturally cross-volume safe, reversible by definition.
 
 Default destination: `<V1-path>/.memctl-v2/` (new sibling under V1 anchor). After migrate succeeds + user verifies notes intact in V2, user manually:
-1. Deletes V1 sibling artifacts (`.obsidian/`, `.memctl/`, root `*.md` notes, `chats/`).
+1. Deletes V1 sibling artifacts (`.obsidian/`, `.memctl/`, root `*.md` notes, `chats/`, `claude-memory/`).
 2. Renames `.memctl-v2/` → `.memctl/` (becomes the new vault root).
 
-Migration scope: copy `.md` files only. Skip `index.db` (rebuilt via post-migrate `memctl ingest`). Skip Obsidian config (`.obsidian/`) — fresh `.obsidian/` created in V2 by `InitVaultStructure`. User loses Obsidian workspace UI state (tabs, last-open file) — acceptable trade-off vs V1 corruption risk.
+### V1 → V2.1 mapping rules
+
+| V1 source | V2.1 destination | Reason |
+|-----------|------------------|--------|
+| `<V1>/chats/*.md` | `<V2>/chats/*.md` | session captures preserved |
+| `<V1>/claude-memory/**/*.md` | `<V2>/claude-memory/**/*.md` | hierarchical memory preserved with relative path |
+| `<V1>/*.md` (root) | `<V2>/*.md` (root) | ad-hoc user notes preserved at root |
+| `<V1>/.memctl/index.db` | SKIP — rebuild via `memctl ingest` post-migrate | runtime, derivative |
+| `<V1>/.memctl/models/` | SKIP — re-download via embedding engine if needed | binary, large |
+| `<V1>/.obsidian/*.json` | SKIP — fresh V2 `.obsidian/` created by Init | Obsidian config; workspace state lost (acceptable) |
+| (V2 new dirs) `tasks/`, `patterns/`, `lessons/`, `decisions/`, `attachments/` | created empty by InitVaultStructure | semantic dirs introduced by V2.1 |
+
+Migration scope: copy `.md` files preserving relative paths. Skip runtime + Obsidian config. User loses Obsidian workspace UI state (tabs, last-open file) — acceptable trade-off vs V1 corruption risk.
 
 Non-destructive design: V1 vault is **READ-ONLY** during migration. Failure mid-migration leaves V1 fully intact + partial V2 → user can `rm -rf <V1>/.memctl-v2/ && memctl migrate-vault ...` retry. No corruption window.
 
@@ -200,6 +212,13 @@ root.AddCommand(migrateCmd);
     // Setup V1 + half-migrated V2 (some files in .memctl-v2/ already)
     // Run migrate again, assert second copy logs "SKIP (dest exists)" for pre-existing, copies remaining
 }
+
+[Fact] public void Dest_inside_v1_internal_rejected()
+{
+    // Setup V1, run migrate --dest <V1>/.memctl/anywhere
+    // Assert MemctlOutcome.Success = false, message mentions destination cannot be inside V1 .memctl/
+    // Same assertion: --dest <V1>/.memctl (the V1 internal subdir itself)
+}
 ```
 
 ### Step 5 — Real-fs smoke test
@@ -220,6 +239,11 @@ test ! -d "$TMP/legacy/.memctl-v2" && echo "dry-run no mutation OK"
 # Real migrate (V1 untouched)
 memctl migrate-vault --vault "$TMP/legacy"
 test -f "$TMP/legacy/.memctl-v2/.obsidian/app.json" && echo "V2 obsidian init OK"
+test -d "$TMP/legacy/.memctl-v2/.obsidian/memctl" && echo "V2.1 runtime dir created OK"
+test -d "$TMP/legacy/.memctl-v2/tasks" && echo "tasks/ dir created OK"
+test -d "$TMP/legacy/.memctl-v2/patterns" && echo "patterns/ dir created OK"
+test -d "$TMP/legacy/.memctl-v2/decisions" && echo "decisions/ dir created OK"
+test -d "$TMP/legacy/.memctl-v2/attachments" && echo "attachments/ dir created OK"
 test -f "$TMP/legacy/.memctl-v2/personal-note.md" && echo "root note copied OK"
 test -f "$TMP/legacy/.memctl-v2/chats/2026-04-01.md" && echo "chats copied OK"
 test -f "$TMP/legacy/.memctl-v2/claude-memory/MEMORY.md" && echo "memory index copied OK"

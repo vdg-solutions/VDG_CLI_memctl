@@ -16,9 +16,41 @@ updated: 2026-05-01
 
 ## Description
 
-Foundation child of epic #30. Refactor `VaultLocator.Discover()` to walk-up tìm `.memctl/` (containing `.obsidian/`) làm vault root container. Refactor `InitVaultStructure` để `memctl init --vault <anchor>` tạo `<anchor>/.memctl/` chứa `.obsidian/` + index.db (flat) + chats/ + models/. Update path computations across 5+ operators (drop `.memctl/` prefix vì vault path LÀ `.memctl/`).
+Foundation child of epic #30. Refactor `VaultLocator.Discover()` to walk-up tìm `.memctl/` (containing `.obsidian/`) làm vault root container. Refactor `InitVaultStructure` cho **V2.1 layout** với runtime nested inside `.obsidian/memctl/` (auto-hidden by Obsidian) + semantic top-level subdirs matching SDLC pipeline writers.
 
-Crucially: legacy V1 detection (sibling `.obsidian/` + `.memctl/`) returns strategy string `"legacy v1 — run memctl migrate-vault"`. StatusOperator + SessionStart hook MUST surface user-visible `::warning::` line — NO silent degrade. Migration itself ships in #32.
+### V2.1 layout
+
+```
+<project>/.memctl/                          ← vault root (Obsidian opens here)
+├── .obsidian/                              ← Obsidian config (auto-hidden)
+│   ├── app.json, appearance.json, daily-notes.json, ...
+│   └── memctl/                             ← memctl runtime (nested, hidden by Obsidian)
+│       ├── index.db                        (SQLite — embeddings + BM25)
+│       ├── models/embeddinggemma-300m/     (~295 MB)
+│       └── hook.log                        (diagnostic)
+├── tasks/                                  ← /sdlc per-phase artifacts (task-{id}-{phase}.md)
+├── patterns/                               ← /retro: error patterns + hit_count mutate
+├── lessons/                                ← /qc-dream: cross-task wisdom (dedupe + merge)
+├── decisions/                              ← /design: ADR-style (adr-{NNNN}-{slug}.md)
+├── chats/                                  ← Stop hook: daily-rollup (YYYY-MM-DD.md)
+├── attachments/                            ← images, binaries (flat with date prefix)
+├── claude-memory/MEMORY.md                 ← top-level index (bot reads first)
+└── README.md                               ← vault explainer (init-generated)
+```
+
+### Writer ownership
+
+| Subdir | Writer | Mutate |
+|--------|--------|--------|
+| `tasks/` | /sdlc orchestrator + each phase skill | append-only |
+| `patterns/` | /retro post-merge | mutate `hit_count` |
+| `lessons/` | /qc-dream | dedupe + merge |
+| `decisions/` | /design phase | append-only (ADR numbering) |
+| `chats/` | Stop hook (`memctl capture`) | append into daily file |
+| `attachments/` | tool/hook output | append-only |
+| `claude-memory/MEMORY.md` | /qc-dream consolidation | rewrite (compress) |
+
+Crucially: legacy V1 detection (sibling `.obsidian/` + `.memctl/`) returns strategy `"legacy v1 — run memctl migrate-vault"`. StatusOperator + SessionStart hook MUST surface user-visible `::warning::` line — NO silent degrade. Migration itself ships in #32.
 
 NO migration command yet — that's #32. Existing V1 vaults still resolve (in legacy mode) and reads work, just with a warning displayed.
 
@@ -82,11 +114,11 @@ public static class VaultLocator
 }
 ```
 
-### Step 2 — InitVaultStructure refactor
+### Step 2 — InitVaultStructure refactor (V2.1 layout)
 
 - **File MODIFY:** `src/memctl/Implementations/Vault/ObsidianVaultReader.cs`
 - `InitVaultStructure(vaultPath)`: detect if caller passes parent dir vs `.memctl/` direct path. Create vault root inside `<vaultPath>/.memctl/` UNLESS path already ends with `.memctl`.
-- Inside vault root: `.obsidian/` (Obsidian config), `chats/`, `models/`, `claude-memory/`. NO nested `.memctl/.memctl/`.
+- Inside vault root: `.obsidian/` (Obsidian config) → `.obsidian/memctl/` (memctl runtime nested, hidden) + 7 top-level semantic subdirs (`tasks/`, `patterns/`, `lessons/`, `decisions/`, `chats/`, `attachments/`, `claude-memory/`).
 
 ```csharp
 public void InitVaultStructure(string vaultPath)
@@ -96,9 +128,19 @@ public void InitVaultStructure(string vaultPath)
     var vaultRoot = isDirect ? trimmed : Path.Combine(trimmed, ".memctl");
 
     Directory.CreateDirectory(vaultRoot);
+
+    // Obsidian config + nested memctl runtime (hidden by Obsidian auto-hide of .obsidian/)
     Directory.CreateDirectory(Path.Combine(vaultRoot, ".obsidian"));
+    Directory.CreateDirectory(Path.Combine(vaultRoot, ".obsidian", "memctl"));
+    Directory.CreateDirectory(Path.Combine(vaultRoot, ".obsidian", "memctl", "models"));
+
+    // Semantic top-level dirs (writer ownership matrix in description)
+    Directory.CreateDirectory(Path.Combine(vaultRoot, "tasks"));
+    Directory.CreateDirectory(Path.Combine(vaultRoot, "patterns"));
+    Directory.CreateDirectory(Path.Combine(vaultRoot, "lessons"));
+    Directory.CreateDirectory(Path.Combine(vaultRoot, "decisions"));
     Directory.CreateDirectory(Path.Combine(vaultRoot, "chats"));
-    Directory.CreateDirectory(Path.Combine(vaultRoot, "models"));
+    Directory.CreateDirectory(Path.Combine(vaultRoot, "attachments"));
     Directory.CreateDirectory(Path.Combine(vaultRoot, "claude-memory"));
 
     WriteIfAbsent(Path.Combine(vaultRoot, ".obsidian", "app.json"),        "{}");
@@ -114,20 +156,20 @@ public void InitVaultStructure(string vaultPath)
         "# Memory index\n\n");
 
     WriteIfAbsent(Path.Combine(vaultRoot, "README.md"),
-        "# memctl vault\n\nObsidian: open this folder as vault. Memctl handles indexing automatically.\n");
+        "# memctl vault\n\nObsidian: open this folder as vault. Memctl handles indexing automatically.\n\n## Subdirs\n\n- `tasks/` — /sdlc per-phase artifacts\n- `patterns/` — /retro error patterns\n- `lessons/` — /qc-dream wisdom\n- `decisions/` — /design ADRs\n- `chats/` — Stop hook daily rollups\n- `attachments/` — images/binaries\n- `claude-memory/MEMORY.md` — top-level index\n");
 }
 ```
 
-### Step 3 — Path computations: drop `.memctl/` prefix
+### Step 3 — Path computations: runtime nested in `.obsidian/memctl/`
 
-Vault path NOW IS `.memctl/`. Path operations that prepended `.memctl/` must drop it.
+Vault path NOW IS `.memctl/`. Runtime files (index, models, log) move INTO `.obsidian/memctl/` subdir → auto-hidden by Obsidian.
 
-- **File MODIFY:** `src/memctl/Operators/IngestOperator.cs:82` — `Path.Combine(vaultPath, "index.db")` (was `.memctl/index.db`)
-- **File MODIFY:** `src/memctl/Operators/HookLog.cs:10,16` — `Path.Combine(vaultPath, "hook.log")`
-- **File MODIFY:** `src/memctl/Implementations/Config/MemctlConfig.cs:11,15` — drop `.memctl` prefix from config + models paths
-- **File MODIFY:** `src/memctl/Implementations/Embedding/GemmaEmbeddingEngine.cs:158` — drop prefix from model path
-- **File MODIFY:** `src/memctl/Operators/StatusOperator.cs:10` — drop prefix from model path (legacy compat: try V2 path first, fallback `.memctl/models/` for legacy)
-- **File MODIFY:** `src/memctl/Implementations/Vault/ObsidianVaultReader.cs:18` — `EnumerateMarkdownFiles` exclude `.obsidian/` only (drop `.memctl/` exclusion since vault root IS `.memctl/`)
+- **File MODIFY:** `src/memctl/Operators/IngestOperator.cs:82` — `Path.Combine(vaultPath, ".obsidian", "memctl", "index.db")` (was `.memctl/index.db`)
+- **File MODIFY:** `src/memctl/Operators/HookLog.cs:10,16` — `Path.Combine(vaultPath, ".obsidian", "memctl", "hook.log")`
+- **File MODIFY:** `src/memctl/Implementations/Config/MemctlConfig.cs:11,15` — config + models paths point inside `.obsidian/memctl/`
+- **File MODIFY:** `src/memctl/Implementations/Embedding/GemmaEmbeddingEngine.cs:158` — `Path.Combine(vaultPath, ".obsidian", "memctl", "models", "embeddinggemma-300m")`
+- **File MODIFY:** `src/memctl/Operators/StatusOperator.cs:10` — model path V2; legacy compat: try V2 `.obsidian/memctl/models/` first, fallback V1 `.memctl/models/` for legacy detection
+- **File MODIFY:** `src/memctl/Implementations/Vault/ObsidianVaultReader.cs:18` — `EnumerateMarkdownFiles` exclude `.obsidian/` only (runtime nested inside, automatically excluded)
 - **File MODIFY:** `src/memctl/Operators/GrepOperator.cs:23` — same exclude update
 
 ### Step 4 — Loud legacy warning (StatusOperator + Bootstrap)
@@ -163,12 +205,19 @@ Legacy V1 detection MUST surface user-visible warning. Hooks that exit 0 silent 
 dotnet build src/memctl/memctl.csproj -c Release --nologo -v q       # 0 warning, 0 error
 dotnet test tests/memctl.Tests/memctl.Tests.csproj --nologo          # 42 baseline + 9 new = 51/51
 
-# Smoke: V2 init clean
+# Smoke: V2.1 init clean
 TMP=$(mktemp -d)
 mkdir -p "$TMP/project/src"
 echo "# README" > "$TMP/project/README.md"
 memctl init --vault "$TMP/project"
-test -d "$TMP/project/.memctl/.obsidian" && echo "V2 layout OK"
+test -d "$TMP/project/.memctl/.obsidian/memctl" && echo "V2.1 runtime nested OK"
+test -d "$TMP/project/.memctl/tasks" && echo "tasks/ dir OK"
+test -d "$TMP/project/.memctl/patterns" && echo "patterns/ dir OK"
+test -d "$TMP/project/.memctl/lessons" && echo "lessons/ dir OK"
+test -d "$TMP/project/.memctl/decisions" && echo "decisions/ dir OK"
+test -d "$TMP/project/.memctl/chats" && echo "chats/ dir OK"
+test -d "$TMP/project/.memctl/attachments" && echo "attachments/ dir OK"
+test -d "$TMP/project/.memctl/claude-memory" && echo "claude-memory/ dir OK"
 test ! -d "$TMP/project/.obsidian" && echo "no V1 pollution at parent OK"
 test -f "$TMP/project/.memctl/.obsidian/app.json" && echo "Obsidian config inside .memctl/ OK"
 
@@ -188,10 +237,10 @@ rm -rf "$TMP"
 | FR-1 | `<path>/.memctl/.obsidian/` resolved as V2 vault, returned path = `<path>/.memctl/` | `dotnet test --filter VaultLocatorV2Tests.WalkUp_finds_v2_when_memctl_contains_obsidian` exit 0 |
 | FR-2 | Walk-up V2 from project subdir resolves to `.memctl/` ancestor | `dotnet test --filter VaultLocatorV2Tests.WalkUp_finds_v2_from_subdir` exit 0 |
 | FR-3 | Legacy V1 (sibling `.obsidian/` + `.memctl/`) returns strategy `legacy v1 — run memctl migrate-vault` | `dotnet test --filter VaultLocatorV2Tests.Legacy_v1_returns_migration_hint` exit 0 |
-| FR-4 | `InitVaultStructure(<parent>)` creates `<parent>/.memctl/.obsidian/`, no nested `.memctl/.memctl/` | smoke `find <path> -name ".obsidian" -path "*/.memctl/.memctl/*"` returns 0 hits |
+| FR-4 | `InitVaultStructure(<parent>)` creates V2.1 layout: `.obsidian/memctl/` runtime + 7 top-level subdirs (tasks, patterns, lessons, decisions, chats, attachments, claude-memory) | smoke runs all `test -d` lines pass |
 | FR-5 | `InitVaultStructure(<path>/.memctl)` direct invocation does NOT create `<path>/.memctl/.memctl/` | `dotnet test --filter InitV2Tests.Init_with_direct_memctl_path_skips_nesting` exit 0 |
-| FR-6 | Index.db, hook.log, models/ resolve to `<vault>/index.db`, `<vault>/hook.log`, `<vault>/models/` (vault path itself, no `.memctl/` prefix) | smoke: `memctl init --vault $TMP/p; memctl ingest --vault $TMP/p/.memctl; test -f $TMP/p/.memctl/index.db` exit 0 |
-| FR-7 | EnumerateMarkdownFiles excludes `.obsidian/` only (vault root IS `.memctl/`, no longer excluded) | smoke: file at `<vault>/.memctl/foo.md` indexed by ingest, `<vault>/.memctl/.obsidian/anything.md` (none expected, but if dropped) NOT indexed |
+| FR-6 | Index.db at `<vault>/.obsidian/memctl/index.db` (nested, hidden by Obsidian) | smoke: `memctl init --vault $TMP/p; memctl ingest --vault $TMP/p/.memctl; test -f $TMP/p/.memctl/.obsidian/memctl/index.db` exit 0 |
+| FR-7 | EnumerateMarkdownFiles excludes `.obsidian/` only (runtime nested inside, auto-excluded) | smoke: file at `<vault>/.memctl/foo.md` indexed by ingest, `<vault>/.memctl/.obsidian/memctl/anything.md` NOT indexed |
 | FR-8 | Legacy V1 detection emits stderr `::warning::` annotation | `dotnet test --filter LegacyWarningTests.Legacy_v1_emits_stderr_warning` exit 0 |
 | FR-9 | StatusOperator JSON output includes `data.legacy_v1: true` + `data.migration_hint` when legacy | smoke: `memctl status --vault <V1-fixture> --json \| python -c "import sys, json; d=json.load(sys.stdin); assert d['data'].get('legacy_v1') is True"` exit 0 |
 | NFR-1 | Build clean: 0 warning, 0 error | `dotnet build -c Release --nologo -v q 2>&1 \| grep -cE "warning\|error"` returns 0 |

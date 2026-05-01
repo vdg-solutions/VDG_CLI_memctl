@@ -36,24 +36,43 @@ This child gates epic completion — once shipped, anh push tag `v1.3.0`, workfl
 - **File MODIFY:** `docs/memctl.md`
 - Remove all V1 examples: `memctl init ~/my-vault`, `<vault>/.memctl-vault`, `cd ~/my-vault`. Replace with V2 examples.
 
-V2 example block to insert:
+V2.1 example block to insert:
 ```markdown
-## Vault layout (V2 as of v1.3.0)
+## Vault layout (V2.1 as of v1.3.0)
 
 `memctl init --vault <project-anchor>` creates `<project-anchor>/.memctl/` as the vault root container:
 
 ```
 <project-anchor>/                ← can be a project repo, your $HOME, anywhere
-├── .memctl/                     ← vault root (containing everything memctl manages)
-│   ├── .obsidian/               ← Obsidian config (open Obsidian here)
-│   ├── index.db                 ← memctl runtime index (rebuilt by `memctl ingest`)
-│   ├── models/                  ← embedding model
-│   ├── chats/                   ← session captures (auto-saved by Stop hook)
-│   ├── claude-memory/MEMORY.md  ← memory index page
-│   └── *.md                     ← your notes (decisions, findings, save commands)
+├── .memctl/                     ← vault root (Obsidian opens here)
+│   ├── .obsidian/               ← Obsidian config (auto-hidden in Obsidian)
+│   │   └── memctl/              ← memctl runtime (nested, hidden)
+│   │       ├── index.db
+│   │       ├── models/embeddinggemma-300m/
+│   │       └── hook.log
+│   ├── tasks/                   ← /sdlc per-phase artifacts
+│   ├── patterns/                ← /retro error patterns
+│   ├── lessons/                 ← /qc-dream wisdom
+│   ├── decisions/               ← /design ADRs
+│   ├── chats/                   ← Stop hook daily-rollups (YYYY-MM-DD.md)
+│   ├── attachments/             ← images, binaries
+│   ├── claude-memory/MEMORY.md  ← top-level index
+│   └── *.md                     ← ad-hoc user notes
 ├── src/                         ← project files OUTSIDE .memctl/ are NOT indexed
 └── README.md                    ← also not indexed
 ```
+
+### Writer ownership
+
+| Subdir | Writer | Mutate |
+|--------|--------|--------|
+| `tasks/` | /sdlc orchestrator | append per phase (task-{id}-{phase}.md) |
+| `patterns/` | /retro post-merge | mutate hit_count |
+| `lessons/` | /qc-dream | dedupe + merge |
+| `decisions/` | /design | append-only ADR (adr-{NNNN}-{slug}.md) |
+| `chats/` | Stop hook (`memctl capture`) | append into daily file |
+| `attachments/` | tool/hook output | append-only |
+| `claude-memory/MEMORY.md` | /qc-dream consolidation | rewrite (compress) |
 
 Memctl walks up from the cwd looking for `.memctl/` containing `.obsidian/`. Per-project install is the natural default — projects with their own `.memctl/` always resolve to themselves first, no env var needed.
 
