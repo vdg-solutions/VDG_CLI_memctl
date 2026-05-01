@@ -1119,38 +1119,53 @@ Archived notes:
 3. **Long-term context** — bot in 2031 can still find 2026 decisions when explicitly searching history
 4. **Storage cheap** — markdown + SQLite cheap; no need for aggressive deletion
 
-### Manual archive controls
+### Anti-archive (auto-pin via natural conversation)
 
-```bash
-memctl archive <id>                  # explicit archive single note
-memctl unarchive <id>                # restore archived note to active
-memctl search --include-archive ...  # search both active + archive
-memctl maintain --force archive      # run archival cold pass now
-```
+**Bot/user không bao giờ type `memctl pin`.** Distill detects explicit signals from conversation turns and auto-pins:
 
-### What memctl NEVER archives auto
+| Signal phrase pattern | Action |
+|----------------------|--------|
+| "this is important", "remember this", "don't forget", "keep this" | weight ← 1.5 + tag `pinned` |
+| "boost X", "pin X", "always surface X" | same |
+| "we'll need this later", "critical decision" | same |
+| User explicit slash: `/memctl-save <title> \| <content> #important` | same (hashtag triggers) |
+| Pattern hit_count ≥ 3 | weight ← 1.5 (proven) |
+| ADR explicitly referenced 5+ times across sessions | weight ← 2.0 (golden track) |
 
-- Notes with `weight >= 1.5` (boosted, decay-resistant)
+Distill (Tier 1+2 in §13) does this automatically post-Stop hook. **Zero user effort.**
+
+Reverse signal (unpin):
+| Signal phrase pattern | Action |
+|----------------------|--------|
+| "we don't need this anymore", "outdated", "scratch that", "ignore X" | weight ← 0.5, allow decay |
+| Explicit supersession: "ADR-0042 supersedes ADR-0041" | older `superseded_by: [adr-0042]`, archived after 30d |
+
+### What memctl NEVER auto-archives
+
+- Notes with `weight >= 1.5` (auto-pinned via signals)
 - Notes tagged `confidence-golden` or `pinned`
-- Notes with active `[[wikilink]]` from non-archived notes (relevance preserved by graph)
+- Notes with active `[[wikilink]]` from non-archived notes (graph relevance preserved)
 - `claude-memory/MEMORY.md` (top-level index always live)
-- `decisions/` ADRs (architectural choices preserved unless explicitly superseded by newer ADR)
-- `LOG.md` (chronological audit always preserved; full file rotation only at user request)
+- ADRs in `decisions/` (architectural choices preserved unless `superseded_by` explicitly set via signal)
+- `LOG.md` (chronological audit always preserved)
 
-### Pinning (anti-archive)
+### Archive size policy: never delete
 
-User can pin a note → never auto-archive:
+Storage is cheap. Vault grows linearly với usage. **Memctl never deletes archived notes.** No "prune-archive" command. Old archives stay accessible via auto-include-archive when Layer 1+2 returns insufficient results.
 
-```bash
-memctl pin <id>      # add tag 'pinned' + boost weight to 1.5
-memctl unpin <id>    # remove pin, normal decay resumes
+### Auto-include-archive on recall miss
+
+If hot path Layer 1+2 returns < N relevant results (default N=3), context-inject auto-extends Layer 2 to include archive scope. Bot still finds historical context when active vault doesn't suffice — no user command needed.
+
+```
+recall pipeline:
+  Layer 1+2 search active scope
+  if results < 3:
+      extend Layer 2 to include archive
+  inject merged
 ```
 
-Pinned notes always surface in default Layer 1 if relevant.
-
-### Archive size monitoring
-
-Pressure metric tracks `archive_size_notes`. If archive grows > 10x active vault size → suggest user run `memctl maintain --force prune-archive` to delete archived notes older than N years (irreversible). Default off — user opt-in only.
+Threshold tunable via pressure config; default behavior covers compound expertise scenarios.
 
 ---
 
