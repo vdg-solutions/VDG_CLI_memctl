@@ -357,3 +357,7 @@ tools/
 
 # QC short-term artifacts
 .claude/memory/short/
+
+# Local Claude Code session artifacts
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
