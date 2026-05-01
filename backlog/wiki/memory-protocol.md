@@ -534,35 +534,58 @@ If ANY threshold breached → `memctl status` shows:
 
 SessionStart hook (existing) reads pressure → emit `::warning::` annotation if `recommended: true`. User sees on every session start until they run maintain.
 
-### Self-deciding maintain (default: ON, hook-triggered)
+### Self-deciding maintain (default: ON, ubiquitous trigger)
 
 **Single command, auto-scopes.** Memctl reads pressure → picks operation:
 
 ```
 read pressure.json
-if contradiction_flags > 0          → lint + flag tentative for review
-elif patterns_pending_promotion >= 3 → full (consolidate + promote + lint)
-elif concept_gap_count > 5           → full + synthesize
-elif days_since_full_maintain > 7    → full
-elif unconsolidated_turns_count > 50 → quick (decay + cache + INDEX)
-elif hours_since_quick_maintain > 24 → quick
+if contradiction_flags > 0          → lint (LLM opt-in, otherwise structural only)
+elif patterns_pending_promotion >= 3 → cheap (consolidate + promote + cache rebuild)
+elif concept_gap_count > 5           → cheap + flag for synthesize (LLM opt-in)
+elif days_since_full_maintain > 7    → cheap (full deterministic clean)
+elif unconsolidated_turns_count > 50 → cheap (distill + decay + cache + INDEX)
+elif hours_since_quick_maintain > 24 → cheap (light: cache + INDEX)
 else                                 → noop, exit 0 silent
 ```
 
 User never picks scope. Memctl decides.
 
-### Auto-trigger via existing hooks (zero user effort default)
+### Universal pressure trigger (every memctl invocation)
 
-**Stop hook** (after every assistant response, async non-blocking):
-- Every 10th response → invoke `memctl maintain` async
-- Internal scope decision via pressure
-- Logs to LOG.md
+Every `memctl <subcommand>` invocation enters via pressure-aware shim:
 
-**SessionStart hook** (every Claude Code session start):
-- Pre-session pressure check → if stale > 24h, run `memctl maintain` async
-- Non-blocking — bot session starts immediately, maintenance happens in background
+```
+memctl status / search / add / get / list / ...
+        │
+        ▼
+[shim] read pressure.json (~1ms)
+        │
+        ├── pressure breached + cheap-fixable + last_auto_maintain >= 60s ago
+        │       ↓
+        │   spawn `memctl maintain --auto` detached process, exit immediately
+        │   (continues in background, doesn't delay main command)
+        │
+        ▼
+execute <subcommand>  (the actual command anh asked for)
+```
 
-Default: ON. User effort = 0.
+Effect: anh chạy bất kỳ memctl command — `status`, `search`, `add`, etc. — pressure opportunistically catches up. Hook events also still trigger via own paths. Pressure check **ubiquitous**.
+
+Throttle: `last_auto_maintain >= 60s` prevents runaway re-trigger if anh chạy nhiều memctl calls liên tiếp.
+
+Cost: ~1ms (stat + parse JSON). Negligible vs subcommand latency.
+
+### Auto-trigger paths summary
+
+| Trigger | Source | Cost | Frequency |
+|---------|--------|------|-----------|
+| Universal shim | Every memctl invocation | ~1ms | Every CLI call |
+| Stop hook (existing) | Every assistant response | ~5s async | Per-response |
+| SessionStart hook (existing) | Claude Code session start | ~5s async | Per-session |
+| Throttle | `last_auto_maintain >= 60s` | — | Prevents thrash |
+
+Default: ALL paths ON. User effort = 0.
 
 ### Manual surface (3 commands, escape hatch only)
 
@@ -749,7 +772,62 @@ If anh changes protocol direction → update this doc, then audit downstream:
 
 ---
 
-## §13 Cost model summary
+## §13 LLM dependency split — cheap vs LLM-required ops
+
+Most maintenance runs **WITHOUT LLM** (cheap, deterministic, free). LLM only required for 2 specific ops, both opt-in.
+
+| Operation | LLM? | Reason |
+|-----------|------|--------|
+| Distill signals (regex phrases like "we decided X because Y") | ❌ | Pattern match deterministic |
+| Decay weights | ❌ | Math: `weight × 0.95^(days/30)` |
+| Rebuild Layer 1 cache | ❌ | SQL re-query top-N |
+| MMR diversity rerank | ❌ | Pure math (cosine sim) |
+| INDEX.md auto-update | ❌ | Iterate notes, regenerate from frontmatter |
+| LOG.md append | ❌ | Write entry |
+| Promote pattern → rule (hit≥3) | ❌ | Move file + tag swap |
+| Structural lint (orphans, broken links, exact dupes) | ❌ | Graph traversal + embedding similarity |
+| Hit count refresh | ❌ | Counter increment |
+| Pressure metrics update | ❌ | Counter |
+| Confidence-based ranking | ❌ | Tag lookup |
+| Supersession marker handling | ❌ | Frontmatter check |
+| **Semantic lint (contradictions)** | ✅ opt-in | Need understand "claim A contradicts B about same entity" |
+| **Source synthesis (10-15 page updates per source)** | ✅ required | Extract entities, decide which pages to update, write summaries |
+| Concept gap detection (basic) | ❌ | Mention frequency count |
+| Concept gap → page suggestion (rich) | ✅ opt-in | LLM writes initial draft if requested |
+| Disambiguation/merge similar (basic) | ❌ | Embedding catches obvious |
+| Disambiguation/merge (nuanced) | ✅ opt-in | Edge cases need LLM judgment |
+
+**Default behavior (no LLM keys configured):**
+- All cheap ops run automatically
+- LLM-required ops emit `"skipped: no LLM configured"` notice
+- Vault stays maintained via deterministic ops alone
+
+**Opt-in LLM (when user wires `--llm-url`):**
+- `memctl ingest-source <url> --llm-url ... --llm-model ... --llm-key ...` (required for synthesis)
+- `memctl maintain --force lint --semantic --llm-url ...` (semantic lint with contradiction detection)
+- Or set defaults: `memctl config set llm.url ... --llm-model ... --llm-key ...`
+
+**Self-lint mode (no external LLM, bot itself reasons):**
+- `memctl maintain --force lint --self` → memctl outputs all notes as structured prompt to stdout
+- Bot reads, reasons, calls `memctl add` to save lint report
+- Free if anh's already trong Claude Code session — bot is the LLM
+
+### Cost summary
+
+```
+DEFAULT (no LLM):
+  All maintenance free + offline + unlimited frequency
+  Cheap ops cover ~80% of maintenance value
+
+OPT-IN LLM:
+  ~$0.05 per 100 notes (cheap model, e.g. gemma 4B via VDG proxy)
+  Run on-demand or scheduled (user cron)
+  Higher quality wiki (semantic lint catches contradictions, source synthesis enriches)
+```
+
+---
+
+## §14 Cost model summary
 
 ```
 PER PROMPT (HOT):                    ~170ms     (model + SQLite + format)
@@ -776,7 +854,7 @@ User effort:
 
 ---
 
-## §14 Open questions / future
+## §15 Open questions / future
 
 These don't block protocol — implementation choices, deferred to future tasks:
 
@@ -789,7 +867,7 @@ These don't block protocol — implementation choices, deferred to future tasks:
 
 ---
 
-## §15 Implementation phases (for backlog #35 when written)
+## §16 Implementation phases (for backlog #35 when written)
 
 NOT a backlog item itself — pointer to future implementation work:
 
@@ -807,7 +885,7 @@ Each phase is independent — ship incrementally.
 
 ---
 
-## §16 References
+## §17 References
 
 - Karpathy llm-wiki gist (2026): https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f
 - MemPalace (April 2026, Milla Jovovich + Ben Sigman): GitHub viral release
@@ -817,7 +895,7 @@ Each phase is independent — ship incrementally.
 
 ---
 
-## §17 Glossary
+## §18 Glossary
 
 - **Vault** — `.memctl/` directory containing all memory for a project
 - **Wing** — project-scoped vault (1 wing per vault by V2.1 design)
