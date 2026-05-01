@@ -97,3 +97,19 @@
 - Fix: For workflow YAML changes, schedule a real-tag smoke run as post-merge verification. Or use workflow_dispatch with a test ref to validate non-tag-driven paths.
 - Hit count: 1
 - Source: retro analysis #28
+
+### [2026-05-01] — pat_resolver_explicit_short_circuit (from retro 31)
+- Severity: low
+- Triggers: [resolver, strategy, explicit-vault, walk-up, vault-locator]
+- Pattern: Operators that depend on `VaultLocator.Discover().Strategy.StartsWith(...)` miss the explicit-path case — when CLI passes `--vault <path>`, resolver short-circuits to Strategy="explicit", bypassing walk-up flags. Operator-side filesystem-state checks must re-verify directly rather than trust resolver Strategy alone.
+- Fix: When an operator needs filesystem-state info (layout type, structure presence), check filesystem directly. Don't rely solely on resolver Strategy.
+- Hit count: 1
+- Source: retro analysis #31
+
+### [2026-05-01] — pat_design_existing_paths_unaudited (from retro 31)
+- Severity: low
+- Triggers: [design, paths, scope, refactor]
+- Pattern: Design phase declares "X moves to Y" without grepping for existing X. When existing paths are user-global vs vault-relative, mismatch causes wasted code/revert. /design phase must grep `Path.Combine` patterns of subject identifiers before drafting integration code blocks.
+- Fix: Add design checklist step: "Grep existing path computations involving the moved component". Report findings in design doc § Path computations.
+- Hit count: 1
+- Source: retro analysis #31

@@ -2,7 +2,7 @@
 id: 31
 type: task
 title: V2 foundation — VaultLocator + Init refactor + path updates + loud legacy warning
-status: In Progress
+status: Done
 priority: high
 parent: 30
 tags:
@@ -291,3 +291,7 @@ rm -rf "$TMP"
 - After #31 ships, dev vault at `E:\repos\CLIs\VDG_CLI_memctl\.memctl/` will report `legacy v1` strategy on `memctl status`. Reads + writes still work via legacy mode. Migration in #32.
 - DO NOT bump version in this child — version stays 1.2.0 until #33 atomic ship with docs.
 - StatusOperator legacy hint must NOT promise migration command exists yet (lands in #32). Phrase as "available in v1.3.0+".
+
+## Comments
+
+**2026-05-01 12:37 user:** Pipeline complete. Merged to main. 49/49 tests pass. Legacy V1 back-compat dropped per anh's directive (hard cutover). Retro at docs/retros/31-retro.md. Memory updated: 2 patterns + 2 insights.
