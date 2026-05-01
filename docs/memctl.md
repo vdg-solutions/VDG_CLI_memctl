@@ -14,64 +14,89 @@ You have persistent memory. It survives across sessions, across projects, across
 
 ---
 
-## Memory Protocol — What to do every session
+## Memory Protocol — What you actually do
 
-### Session start (Recall)
+> Full protocol: `backlog/wiki/memory-protocol.md` (canonical, ~1700 lines, 22 sections — everything below is summary).
+
+### Mental model
+
+**You don't manually capture or recall.** Hooks do that. You consume context auto-injected into every prompt + invoke `memctl search` via Bash when surface coverage insufficient. Maintenance auto-triggered on every memctl invocation (pressure-checked, throttled 60s).
+
+### 4 sub-systems (memory types)
+
+| Type | Stores | Subdir | Lifecycle |
+|------|--------|--------|-----------|
+| **Episodic** | Chat turns, session logs | `chats/` (daily YYYY-MM-DD.md) | Stop hook auto-write; archive after 1 year |
+| **Semantic** | Facts, decisions, patterns, lessons | `lessons/`, `decisions/`, `patterns/` | /design + /retro + /qc-dream write |
+| **Procedural** | Active rules (golden, qc-rule, anti-pattern) | tag-routed | /qc-dream promote (hit_count ≥ 3) |
+| **Identity** | Who anh is, stack, preferences | one identity note | Auto-update via Mode B distill from chats |
+
+### 3 compute tiers (every memctl call self-routes)
+
+| Tier | Budget | What runs |
+|------|--------|-----------|
+| **HOT** | <500ms | regex/math, pressure check, BM25+semantic, smart retrieval (5 signals) |
+| **WARM** | <5s async | embedding compute, ingest, structural lint |
+| **COLD** | opportunistic | bot-in-session distill via inbox (Mode B), full dream cycle |
+
+### Encode (writes — mostly automatic)
+
 ```bash
-memctl status                           # vault healthy? model ready?
-memctl ingest                           # re-index if new files added outside Claude
-memctl list --limit 10                  # load top memories by importance
-memctl search "<current task keywords>" # surface relevant prior decisions
+# Auto: Stop hook captures conversation → chats/{date}.md (you do nothing)
+# Auto: UserPromptSubmit hook injects ## Memory Context (you read it)
+
+# Manual, by SDLC role:
+memctl add "<text>" --tags "session,task-{id}"           # session state
+memctl add "<text>" --tags "qc-feedback,task-{id}"        # retry feedback
+memctl add "<text>" --tags "qc-error,project-{name}"      # mid-term error pattern
+memctl add "<text>" --tags "golden-rule"                  # cross-project universal
+memctl add "<text>" --tags "insight"                      # meta-learning
+memctl add "<text>" --tags "dream-log"                    # consolidation entry
+
+# Boost importance:
+memctl boost <id> --weight 1.5
 ```
 
-### During session (Encode)
+### Recall (reads — Tier 3 active recall when injected context insufficient)
+
 ```bash
-# After a decision, finding, or discovered pattern:
-memctl add --title "Decision: use X over Y" --content "Rationale: ..."
-memctl append --id <note-id> --content "Update: discovered edge case..."
-
-# Boost notes that will matter next session:
-memctl weight <id> 1.5
-
-# File useful answers back — they compound future context:
-memctl add --title "Analysis: <topic>" --content "<synthesized answer>"
+memctl search-tags "session,task-{id}"        # tag-precise
+memctl search "<query>"                       # hybrid BM25+semantic with smart retrieval
+memctl get <id-or-path>                       # full note content
+memctl list --limit 10                        # top by weight
 ```
 
-### Session end (Consolidate)
+**Smart retrieval (5 default signals on every search):**
+1. Cluster routing (vault ≥500 notes only) → 2. BM25+semantic hybrid → 3. PRF rerank (drift-guarded) → 4. PageRank boost (recency-clamped) → 5. Wikilink anchor expansion (sparse-graph guarded)
+
+Realistic gain: ~5-10% (vault <100), ~25-35% (vault 500-2000). NOT 50-60%. See protocol §6.
+
+### Maintenance (single command, self-decides scope)
+
 ```bash
-memctl add --title "Session: <date> — <task>" --content "<summary of what was done, decided, left open>"
+memctl maintain               # checks pressure.json, runs only what's needed
+# → may run: ingest re-index, lint, decay, dedupe, dream cycle
+# → throttle 60s — no thrash
+# → emits {"actions": [...], "skipped_reason": "..."} so caller knows
 ```
 
-### Periodic maintenance (Lint) — fully automatic after G3 ships
-```bash
-# Structural lint: baked into ingest — runs every session, free
-memctl ingest
-# → {"indexed": 47, "lint": {"orphans": 2, "broken_links": 1, "duplicates": 0}}
+Auto-fires on every memctl invocation (passive). Manual force: `memctl maintain --force`.
 
-# Semantic lint: auto-triggered by ingest when overdue (default: every 7 days)
-# Uses cheap LLM (~$0.05/run for 100 notes) — no manual action needed
-# Report saved as vault note → bot reads it next session start
-# ingest output includes hint when overdue:
-# → {"semantic_lint": {"days_since": 9, "overdue": true, "hint": "Run: memctl lint --semantic ..."}}
+### Tag schema (routing key)
 
-# Manual semantic lint — bot does it itself (no external LLM):
-memctl lint --semantic --self
-# → outputs all notes as structured prompt to stdout
-# → bot reads, reasons, calls `memctl create` to save lint report
-
-# Manual semantic lint — via VDG proxy:
-memctl lint --semantic \
-  --llm-url http://127.0.0.1:1234/v1 \
-  --llm-model gemma4:31b-cloud \
-  --llm-key $PROXY_KEY
-
-# Coming G5:
-memctl decay --days 30      # reduce weight of notes not touched in N days
-```
-
-Until G3 ships, manually ask the bot: *"Review my vault and clean up duplicates/orphans."*
-
-> **Coming in roadmap G1+G2:** This full protocol will run automatically via Claude Code hooks — capture without remembering to capture, recall without remembering to recall.
+| Tag | Purpose | Subdir/Lifecycle |
+|-----|---------|------------------|
+| `session,task-{id}` | SDLC pipeline state | short-term, deleted after task Done |
+| `qc-feedback,task-{id}` | QC retry feedback | short-term |
+| `qc-error,project-{name}` | Mid-term error patterns | promote to qc-rule at hit_count ≥ 3 |
+| `qc-rule,project-{name}` | Active project rules | promote to golden-rule at strength > 5 |
+| `qc-score,project-{name}` | Score history | compress oldest after 20 sessions |
+| `golden-rule` | Universal cross-project | long-term, retire at strength < 0.05 |
+| `anti-pattern` | Recurring agent mistakes | long-term |
+| `insight` | Meta-learning | long-term |
+| `dream-log` | Consolidation history | append-only |
+| `user-preference` | Stack/style/identity | long-term |
+| `project-context,project-{name}` | Project domain | mid-term |
 
 ---
 
