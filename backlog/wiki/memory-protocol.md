@@ -161,7 +161,13 @@ Marker pair: `.memctl/` AND `.memctl/.obsidian/`. Walk-up resolver from cwd. **P
 ├── INDEX.md                           ← (NEW) Karpathy-style catalog
 ├── LOG.md                             ← (NEW) chronological audit
 ├── README.md                          ← vault explainer (init)
-└── *.md                               ← ad-hoc scratchpad
+├── *.md                               ← ad-hoc scratchpad
+└── archive/                           ← (NEW) excluded from default search; see §18
+    ├── decisions/
+    ├── patterns/
+    ├── lessons/
+    └── chats/
+        └── YYYY/
 ```
 
 Models live user-global at `~/.memctl/models/embeddinggemma-300m/` (shared across vaults, not per-vault).
@@ -822,12 +828,14 @@ Most maintenance runs **WITHOUT LLM** (cheap, deterministic, free). LLM only req
 | Pressure metrics update | ❌ | Counter |
 | Confidence-based ranking | ❌ | Tag lookup |
 | Supersession marker handling | ❌ | Frontmatter check |
-| **Semantic lint (contradictions)** | ✅ opt-in | Need understand "claim A contradicts B about same entity" |
-| **Source synthesis (10-15 page updates per source)** | ✅ required | Extract entities, decide which pages to update, write summaries |
-| Concept gap detection (basic) | ❌ | Mention frequency count |
-| Concept gap → page suggestion (rich) | ✅ opt-in | LLM writes initial draft if requested |
-| Disambiguation/merge similar (basic) | ❌ | Embedding catches obvious |
-| Disambiguation/merge (nuanced) | ✅ opt-in | Edge cases need LLM judgment |
+| **Contradiction structural proxy** | ❌ | Same `entity` tag + conflicting frontmatter values (e.g., 2 notes with `entity: postgres` and `claim: chosen` vs `claim: rejected`) — flag mismatched assertions deterministically without LLM |
+| **Concept gap structural** | ❌ | Entity mentioned 3+ in `[[wikilink]]` but no entity page exists → suggest creating |
+| **Tentative note auto-process** | ❌ | After N=3 re-mentions of same fact → promote to `confidence-proven`. After 90d untouched → decay to `confidence-stale` then archive. |
+| **SQLite vacuum** | ❌ | `PRAGMA vacuum;` quarterly when vault > 1000 notes |
+| **Semantic lint (deeper contradictions)** | ✅ opt-in | Catches "claim A semantically contradicts B" beyond simple tag mismatch |
+| **Source synthesis (10-15 page updates per source)** | ✅ required | Extract entities, decide which pages update, write summaries — only Mode B or external LLM |
+| Concept gap → rich page draft | ✅ opt-in | LLM writes initial draft if requested |
+| Disambiguation/merge nuanced | ✅ opt-in | Edge cases need LLM judgment |
 
 ### Operating modes
 
@@ -906,7 +914,247 @@ User effort:
 
 ---
 
-## §15 Open questions / future
+## §15 Empirical success metric
+
+Protocol theoretical until validated with real long-term use. Track this metric to confirm "bot actually remembers":
+
+**Recall hit rate** = of N times bot needed past context, how many were correctly surfaced (Layer 1+2+3) without explicit re-asking?
+
+```bash
+# After 1 month of use:
+memctl maintain --check --report-recall
+
+→ {
+    "recall_attempts": 47,           # times bot invoked recall
+    "recall_hits": 38,               # past context successfully surfaced
+    "recall_misses": 9,              # bot had to re-derive or asked user
+    "hit_rate": 0.81,                # 81% — good (target ≥ 0.7)
+    "by_layer": {
+      "layer_0_identity": "100% always available",
+      "layer_1_top_weighted": "75% relevant",
+      "layer_2_context_search": "85% relevant",
+      "layer_3_explicit_search": "45% used (rare)"
+    }
+}
+```
+
+Targets:
+- ≥ 0.7 hit rate after 1 month: protocol working
+- < 0.5 hit rate: ranking broken, needs re-tune
+- Layer 1 > 70% relevance: cache + scoring correct
+- Layer 3 < 50% used: most needs covered by passive surface (good)
+
+Anh check this metric quarterly. If bad → tune scoring weights, audit pressure thresholds, review tentative queue.
+
+---
+
+## §16 Failure modes + recovery
+
+| Failure | Symptom | Recovery |
+|---------|---------|----------|
+| `index.db` corrupt | `memctl search` returns 0 always | `memctl ingest --vault X` rebuild from .md files |
+| `pressure.json` stale/corrupt | maintain not auto-triggering | `memctl maintain --force quick` (rebuilds pressure) |
+| Bot in Mode B skips maintenance | LLM ops never run, contradictions accumulate | User runs `/memctl-maintain` slash explicit; or `memctl maintain --force lint --self` outputs prompt for bot to consume |
+| Vault size > 5000 notes, search slow | Latency creeps over 200ms hot budget | SQLite vacuum (auto in cold path quarterly when notes > 1000); archive `chats/` older than 1 year to `chats/archive/YYYY/` |
+| Auto-distill missed nuanced insight | Bot's deep thought lost to chats/ noise | User explicit `/memctl-save`; or Mode B bot re-reads chats/ daily, re-extracts |
+| Contradiction undetected in Mode A | Conflicting facts coexist in vault | Set `--llm-url` for periodic semantic lint OR run `memctl maintain --force lint --self` in Claude Code session monthly |
+| Tentative note never confirmed/discarded | Queue grows | Auto-process: 3+ re-mentions → promote, 90d untouched → archive |
+| `.memctl/` accidentally deleted | All vault gone | User backup responsibility — `git init` inside `.memctl/` for free version control if anh wants |
+| Cache stale (Layer 1 not refreshed) | Top-15 surface outdated | Cold path rebuilds every K Stop hooks; or `memctl maintain --force quick` |
+| Vault location ambiguous (multiple `.memctl/` in cwd path) | Wrong vault resolved | Walk-up takes nearest first (correct behavior); explicit `--vault <path>` overrides |
+| Skill instruction not followed by bot | Mode B silent failure | Hook-driven shim catches cheap ops; LLM ops degrade to "skipped" notice — no silent corruption |
+
+---
+
+## §17 Day-in-life example (concrete flow)
+
+### Day 1, 09:00 — Init project
+
+```bash
+cd ~/repos/my-new-project
+memctl init --vault .       # creates ./.memctl/ V2.1 layout
+echo ".memctl/" >> .gitignore
+```
+
+→ `.memctl/.obsidian/memctl/index.db` empty
+→ `.memctl/INDEX.md` empty stub
+→ `.memctl/LOG.md` empty
+→ `.memctl/.obsidian/memctl/pressure.json` initialized to zeros
+
+### Day 1, 10:30 — Discussion captured
+
+Anh + bot discuss vault layout V2 vs V1.
+
+→ Stop hook fires after each response
+→ `memctl capture` writes turn to `chats/2026-05-01.md`
+→ `memctl distill` (regex) catches "we chose `.memctl/` over `.memctl-vault/` because consistency with .git/ pattern"
+→ Auto-creates `decisions/adr-0001-vault-layout.md` with `confidence-tentative` tag
+→ `pressure.unconsolidated_turns_count = 1`
+→ `LOG.md` appends: `## [2026-05-01 10:30] decision | adr-0001 vault layout (tentative)`
+
+Bot doesn't think about saving. Memctl handled.
+
+### Day 1, 14:00 — Anh referenced past decision
+
+Anh: "what did we decide about vault layout?"
+
+→ UserPromptSubmit hook fires
+→ `memctl context-inject` reads pressure (~1ms), no maintenance breach
+→ Layer 0 (identity) + Layer 1 (top-15 by weight) + Layer 2 (search "vault layout decision") injected
+→ Bot prompt now starts với:
+  ```
+  ## Memory Context
+  ### ADR-0001: Vault layout (tentative)
+  Chose .memctl/ over .memctl-vault/ because consistency with .git/ pattern...
+  ```
+→ Bot reads, recalls, answers without re-asking anh
+
+### Day 5, anh discussed similar topic 3 times → tentative ADR auto-promoted
+
+→ Distill detects 3rd re-mention of "vault layout decision"
+→ Auto-promote ADR confidence-tentative → confidence-proven
+→ `LOG.md` appends: `## [2026-05-05] promote | adr-0001 tentative→proven (3 mentions)`
+
+### Day 10, anh runs `memctl status`
+
+→ Universal pressure shim runs (~1ms)
+→ Pressure: `unconsolidated_turns_count=58` (> 50 threshold)
+→ Spawn `memctl maintain --auto` detached
+→ status command continues, returns instantly
+→ Background: distill catchup, decay weights, rebuild Layer 1 cache, append LOG.md
+
+### Day 30, vault has ~30 ADRs, ~50 patterns, ~5 lessons
+
+→ Anh asks "what bug did we hit with auth?"
+→ context-inject Layer 2 search "auth bug"
+→ Pre-filter: cwd has `wing-my-project` → narrow to that wing
+→ Top hit: `patterns/pat-auth-token-expiry.md` (hit_count=4, weight=1.5, confidence-proven)
+→ MMR rerank: returns this + 2 different aspects (not 5 dupes of token-expiry)
+→ Bot recalls past pattern, applies fix without re-deriving
+
+### Day 90, anh launches Claude Code
+
+→ SessionStart hook reads pressure
+→ `days_since_full_maintain=8` (>7 threshold)
+→ Hook outputs JSON with `data.maintenance.recommended: true, reason: "weekly heartbeat"`
+→ Skill rule fires: bot reads recommendation, runs `memctl maintain` via Bash
+→ Mode B detected (CLAUDECODE=1) → bot does inline:
+  - Cheap ops (auto): decay weights, rebuild cache
+  - Tentative review: 7 notes flagged → bot reads, promotes 4, archives 3 (no LLM external)
+→ `LOG.md`: `## [2026-08-01 09:00] maintain-full | mode-B | promoted 4, archived 3, decayed 12`
+
+### Day 365, vault has ~50 ADRs, 200 patterns, 30 lessons, 365 chats files
+
+→ SQLite vacuum auto-runs in cold path (notes > 1000 threshold)
+→ Old `chats/` files (> 1 year) auto-archive to `chats/archive/2026/`
+→ Recall hit rate metric: anh runs `memctl maintain --check --report-recall`
+  ```
+  hit_rate: 0.84
+  Layer 1 relevance: 78%
+  Layer 2 relevance: 89%
+  Layer 3 used: 38%
+  ```
+→ Above target 0.7 → protocol working empirically
+
+### Day 1825 (5 years), vault > 5000 notes
+
+→ Cold path runs structural lint quarterly
+→ Concept gap detection: 3 entities mentioned 5+ times without dedicated page → suggest creating
+→ Mode B bot reviews suggestions weekly, creates pages or dismisses
+→ Compound expertise: bot answer in 2031 informed by decisions from 2026
+→ Recall hit rate stable ~0.8
+
+---
+
+## §18 Archival — nhớ cần thiết, loại bỏ dư thừa
+
+Vault grows over time. Without pruning, signal drowns in noise. Archival keeps signal active in default search; redundant moved to archive (still readable, still searchable on demand).
+
+### Archive vs delete
+
+| Action | When | Recoverable? |
+|--------|------|--------------|
+| **Archive** (default) | Auto via cold path | YES — move file to `archive/` subdir, exclude from default search |
+| **Delete** (explicit) | User `memctl delete <id>` | NO — file removed from disk |
+
+Default behavior: **archive, never delete.** Vault history preserved.
+
+### Auto-archive triggers
+
+Cold path checks each note quarterly (or when triggered manually `memctl maintain --force archive`):
+
+| Criterion | Threshold | Action |
+|-----------|-----------|--------|
+| Weight decayed below floor | `weight × 0.95^(days_since_modified/30) < 0.1` | Archive |
+| Superseded > 30d | `superseded_by` field set + 30 days passed | Archive |
+| Tentative note untouched | `confidence-tentative` + 90 days no re-mention | Archive |
+| Chats older than 1 year | `chats/YYYY-MM-DD.md` where YYYY < current_year - 1 | Move to `chats/archive/YYYY/` |
+| Pattern merged into lesson | After consolidation, original pattern files → archive | Archive |
+| Dupe merged | After dedup, kept primary, archived secondaries | Archive |
+
+### Archive layout
+
+```
+<vault>/
+├── archive/                      ← (NEW) excluded from default search
+│   ├── decisions/                ← superseded ADRs
+│   ├── patterns/                 ← merged into lessons
+│   ├── lessons/                  ← stale wisdom
+│   ├── chats/
+│   │   └── YYYY/                 ← old daily rollups
+│   └── <other-subdirs>/
+└── ... (active subdirs)
+```
+
+Archived notes:
+- Still parseable markdown
+- Still in `index.db` (with `archived: true` flag)
+- Excluded from default `memctl search` / `context-inject`
+- Surface only if explicit: `memctl search --include-archive` or `memctl get <id>` direct
+
+### Why archive (not delete)
+
+1. **Audit trail** — anh + bot can review past decisions, even superseded ones, when researching "why did we change?"
+2. **Recovery** — if archive triggered wrongly, user can `memctl unarchive <id>` to restore
+3. **Long-term context** — bot in 2031 can still find 2026 decisions when explicitly searching history
+4. **Storage cheap** — markdown + SQLite cheap; no need for aggressive deletion
+
+### Manual archive controls
+
+```bash
+memctl archive <id>                  # explicit archive single note
+memctl unarchive <id>                # restore archived note to active
+memctl search --include-archive ...  # search both active + archive
+memctl maintain --force archive      # run archival cold pass now
+```
+
+### What memctl NEVER archives auto
+
+- Notes with `weight >= 1.5` (boosted, decay-resistant)
+- Notes tagged `confidence-golden` or `pinned`
+- Notes with active `[[wikilink]]` from non-archived notes (relevance preserved by graph)
+- `claude-memory/MEMORY.md` (top-level index always live)
+- `decisions/` ADRs (architectural choices preserved unless explicitly superseded by newer ADR)
+- `LOG.md` (chronological audit always preserved; full file rotation only at user request)
+
+### Pinning (anti-archive)
+
+User can pin a note → never auto-archive:
+
+```bash
+memctl pin <id>      # add tag 'pinned' + boost weight to 1.5
+memctl unpin <id>    # remove pin, normal decay resumes
+```
+
+Pinned notes always surface in default Layer 1 if relevant.
+
+### Archive size monitoring
+
+Pressure metric tracks `archive_size_notes`. If archive grows > 10x active vault size → suggest user run `memctl maintain --force prune-archive` to delete archived notes older than N years (irreversible). Default off — user opt-in only.
+
+---
+
+## §19 Open questions / future
 
 These don't block protocol — implementation choices, deferred to future tasks:
 
@@ -919,7 +1167,7 @@ These don't block protocol — implementation choices, deferred to future tasks:
 
 ---
 
-## §16 Implementation phases (for backlog #35 when written)
+## §20 Implementation phases (for backlog #35 when written)
 
 NOT a backlog item itself — pointer to future implementation work:
 
@@ -937,7 +1185,7 @@ Each phase is independent — ship incrementally.
 
 ---
 
-## §17 References
+## §21 References
 
 - Karpathy llm-wiki gist (2026): https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f
 - MemPalace (April 2026, Milla Jovovich + Ben Sigman): GitHub viral release
@@ -947,7 +1195,7 @@ Each phase is independent — ship incrementally.
 
 ---
 
-## §18 Glossary
+## §22 Glossary
 
 - **Vault** — `.memctl/` directory containing all memory for a project
 - **Wing** — project-scoped vault (1 wing per vault by V2.1 design)
