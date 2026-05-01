@@ -583,9 +583,41 @@ Cost: ~1ms (stat + parse JSON). Negligible vs subcommand latency.
 | Universal shim | Every memctl invocation | ~1ms | Every CLI call |
 | Stop hook (existing) | Every assistant response | ~5s async | Per-response |
 | SessionStart hook (existing) | Claude Code session start | ~5s async | Per-session |
+| Bot proactive (in-session) | Skill instruction reads `data.maintenance.recommended` | varies | Per session start |
+| `/memctl-maintain` slash command | User explicit | varies | On demand |
 | Throttle | `last_auto_maintain >= 60s` | — | Prevents thrash |
 
 Default: ALL paths ON. User effort = 0.
+
+### Bot proactive maintain (in Claude Code session)
+
+When bot runs inside Claude Code session, skill instruction wires bot to act on maintenance recommendation:
+
+**Skill rule (in `docs/memctl.md`):**
+> When SessionStart hook output contains `data.maintenance.recommended: true`, bot SHOULD invoke `memctl maintain` via Bash tool early in session. For LLM-required ops (semantic lint, source synthesis), bot does it inline: Read flagged notes via Read tool, reason about contradictions/synthesis, save findings via `memctl add` with appropriate tags.
+
+Bot trong session = LLM available → free LLM ops without external API call.
+
+### `/memctl-maintain` slash command
+
+Plugin command for user explicit trigger:
+
+```markdown
+---
+description: Run vault maintenance — auto-decides scope from pressure
+argument-hint: "[--force <scope>] | [--check]"
+---
+1. Run `memctl maintain --check` to see pressure status.
+2. If pressure breached or anh passes --force <scope>:
+   a. Cheap ops: `memctl maintain` (auto-scopes via pressure)
+   b. LLM-required ops (semantic lint, source synthesis):
+      - Read flagged notes via Read tool
+      - Reason about contradictions / synthesize sources
+      - Save findings via `memctl add` with tags
+3. Append LOG.md summary via `memctl add ... --tags "log,maintain"`.
+```
+
+User types `/memctl-maintain` → bot runs both cheap + LLM ops in-session.
 
 ### Manual surface (3 commands, escape hatch only)
 
@@ -797,32 +829,52 @@ Most maintenance runs **WITHOUT LLM** (cheap, deterministic, free). LLM only req
 | Disambiguation/merge similar (basic) | ❌ | Embedding catches obvious |
 | Disambiguation/merge (nuanced) | ✅ opt-in | Edge cases need LLM judgment |
 
-**Default behavior (no LLM keys configured):**
-- All cheap ops run automatically
-- LLM-required ops emit `"skipped: no LLM configured"` notice
-- Vault stays maintained via deterministic ops alone
+### Operating modes
 
-**Opt-in LLM (when user wires `--llm-url`):**
-- `memctl ingest-source <url> --llm-url ... --llm-model ... --llm-key ...` (required for synthesis)
-- `memctl maintain --force lint --semantic --llm-url ...` (semantic lint with contradiction detection)
-- Or set defaults: `memctl config set llm.url ... --llm-model ... --llm-key ...`
+**Mode A — Standalone CLI (no Claude Code session):**
+- Cheap ops: auto (shim + hooks)
+- LLM-required ops: 2 paths
+  - Skipped (no LLM key configured) — emit `"skipped: no LLM configured"` notice
+  - External LLM (when `--llm-url` configured) — calls cheap model (e.g. gemma 4B via VDG proxy, ~$0.05/100 notes)
 
-**Self-lint mode (no external LLM, bot itself reasons):**
+**Mode B — Inside Claude Code session (`CLAUDECODE=1` env detected):**
+- Cheap ops: auto (same as Mode A)
+- LLM-required ops: **bot does it itself** — no external API
+  - Memctl emits structured prompt to stdout for bot
+  - Bot reads via Bash tool output
+  - Reasons via internal thinking
+  - Read flagged notes via Read tool (for synthesis)
+  - Saves results via `memctl add` calls
+  - $0 external cost — bot IS the LLM
+
+Mode auto-detected by memctl via env var. User doesn't configure.
+
+**Self-lint mode (explicit, anywhere):**
 - `memctl maintain --force lint --self` → memctl outputs all notes as structured prompt to stdout
-- Bot reads, reasons, calls `memctl add` to save lint report
-- Free if anh's already trong Claude Code session — bot is the LLM
+- Bot/user reads, reasons, calls `memctl add` to save lint report
+- Equivalent to Mode B but explicit invocation
+
+**Opt-in external LLM (Mode A only, when CLAUDECODE not set):**
+- `memctl ingest-source <url> --llm-url ... --llm-model ... --llm-key ...` (required for synthesis if not in session)
+- `memctl maintain --force lint --semantic --llm-url ...`
+- Or set defaults: `memctl config set llm.url ... --llm-model ... --llm-key ...`
 
 ### Cost summary
 
 ```
-DEFAULT (no LLM):
-  All maintenance free + offline + unlimited frequency
-  Cheap ops cover ~80% of maintenance value
+Mode A standalone, no LLM:
+  All cheap maintenance free + offline + unlimited
+  ~80% of value covered. LLM ops skipped.
 
-OPT-IN LLM:
-  ~$0.05 per 100 notes (cheap model, e.g. gemma 4B via VDG proxy)
+Mode A standalone, opt-in external LLM:
+  ~$0.05 per 100 notes (cheap model)
   Run on-demand or scheduled (user cron)
-  Higher quality wiki (semantic lint catches contradictions, source synthesis enriches)
+  100% of value, $$ cost
+
+Mode B inside Claude Code:
+  100% of value, $0 external cost
+  Bot in session does LLM work for free
+  Default behavior when bot uses memctl
 ```
 
 ---
