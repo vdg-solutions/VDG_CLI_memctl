@@ -79,5 +79,5 @@ public sealed class IngestOperator(IVaultReader vault, INoteIndex index, GemmaEm
     }
 
     internal static string DbPath(string vaultPath) =>
-        Path.Combine(vaultPath, ".memctl", "index.db");
+        Path.Combine(vaultPath, ".obsidian", "memctl", "index.db");
 }

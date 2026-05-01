@@ -14,8 +14,7 @@ public sealed class ObsidianVaultReader : IVaultReader
 
     public IEnumerable<string> EnumerateMarkdownFiles(string vaultPath) =>
         Directory.EnumerateFiles(vaultPath, "*.md", SearchOption.AllDirectories)
-                 .Where(f => !f.Contains(Path.DirectorySeparatorChar + ".obsidian" + Path.DirectorySeparatorChar)
-                          && !f.Contains(Path.DirectorySeparatorChar + ".memctl" + Path.DirectorySeparatorChar));
+                 .Where(f => !f.Contains(Path.DirectorySeparatorChar + ".obsidian" + Path.DirectorySeparatorChar));
 
     public Note ParseNote(string absolutePath, string vaultPath)
     {
@@ -47,24 +46,37 @@ public sealed class ObsidianVaultReader : IVaultReader
 
     public void InitVaultStructure(string vaultPath)
     {
-        Directory.CreateDirectory(vaultPath);
-        Directory.CreateDirectory(Path.Combine(vaultPath, ".obsidian"));
-        Directory.CreateDirectory(Path.Combine(vaultPath, ".memctl"));
-        Directory.CreateDirectory(Path.Combine(vaultPath, "chats"));
+        // V2.1: vault root = `.memctl/` container. Detect parent vs direct path.
+        var trimmed = vaultPath.TrimEnd(Path.DirectorySeparatorChar);
+        var isDirect = Path.GetFileName(trimmed) == ".memctl";
+        var vaultRoot = isDirect ? trimmed : Path.Combine(trimmed, ".memctl");
 
-        WriteIfAbsent(Path.Combine(vaultPath, ".obsidian", "app.json"),        "{}");
-        WriteIfAbsent(Path.Combine(vaultPath, ".obsidian", "appearance.json"), "{}");
-        WriteIfAbsent(Path.Combine(vaultPath, ".obsidian", "community-plugins.json"),
+        Directory.CreateDirectory(vaultRoot);
+
+        // Obsidian config + nested memctl runtime (auto-hidden by Obsidian inside .obsidian/)
+        // Note: models/ stays user-global (~/.memctl/models/) — shared across vaults, not per-vault.
+        Directory.CreateDirectory(Path.Combine(vaultRoot, ".obsidian"));
+        Directory.CreateDirectory(Path.Combine(vaultRoot, ".obsidian", "memctl"));
+
+        // 7 semantic top-level dirs (writer ownership: tasks=/sdlc, patterns=/retro,
+        // lessons=/qc-dream, decisions=/design, chats=Stop hook, attachments=tools, claude-memory=/qc-dream)
+        foreach (var d in new[] { "tasks", "patterns", "lessons", "decisions", "chats", "attachments", "claude-memory" })
+            Directory.CreateDirectory(Path.Combine(vaultRoot, d));
+
+        WriteIfAbsent(Path.Combine(vaultRoot, ".obsidian", "app.json"),        "{}");
+        WriteIfAbsent(Path.Combine(vaultRoot, ".obsidian", "appearance.json"), "{}");
+        WriteIfAbsent(Path.Combine(vaultRoot, ".obsidian", "community-plugins.json"),
             """["dataview","calendar"]""");
-        WriteIfAbsent(Path.Combine(vaultPath, ".obsidian", "core-plugins.json"),
+        WriteIfAbsent(Path.Combine(vaultRoot, ".obsidian", "core-plugins.json"),
             """{"daily-notes":true,"templates":true,"backlink":true,"outline":true,"word-count":true}""");
-        WriteIfAbsent(Path.Combine(vaultPath, ".obsidian", "daily-notes.json"),
+        WriteIfAbsent(Path.Combine(vaultRoot, ".obsidian", "daily-notes.json"),
             """{"folder":"chats","format":"YYYY-MM-DD"}""");
 
-        // Placeholder so @/vault/claude-memory/MEMORY.md import doesn't fail on first session
-        Directory.CreateDirectory(Path.Combine(vaultPath, "claude-memory"));
-        WriteIfAbsent(Path.Combine(vaultPath, "claude-memory", "MEMORY.md"),
-            "---\ntype: user\n---\n\n");
+        WriteIfAbsent(Path.Combine(vaultRoot, "claude-memory", "MEMORY.md"),
+            "---\ntype: user\n---\n\n# Memory index\n\n");
+
+        WriteIfAbsent(Path.Combine(vaultRoot, "README.md"),
+            "# memctl vault\n\nObsidian: open this folder as vault. Memctl handles indexing automatically.\n\n## Subdirs\n\n- `tasks/` — /sdlc per-phase artifacts\n- `patterns/` — /retro error patterns\n- `lessons/` — /qc-dream wisdom\n- `decisions/` — /design ADRs\n- `chats/` — Stop hook daily rollups\n- `attachments/` — images/binaries\n- `claude-memory/MEMORY.md` — top-level index\n");
     }
 
     private static void WriteIfAbsent(string path, string content)

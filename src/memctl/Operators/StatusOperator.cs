@@ -23,7 +23,7 @@ public sealed class StatusOperator
         var noteCount  = indexed ? CountNotes(dbPath) : 0;
 
         var hint = discovery.Vault is null
-            ? "No vault found. Run 'memctl init --vault <path>' to create one, or cd to a folder containing .obsidian/."
+            ? "No vault found. Run 'memctl init --vault <path>' to create one, or cd to a folder containing .memctl/.obsidian/."
             : !exists
                 ? $"Vault path '{resolved}' does not exist on disk."
                 : !indexed

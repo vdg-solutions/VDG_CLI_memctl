@@ -19,8 +19,7 @@ public sealed class GrepOperator
 
         var hits  = new List<GrepHit>();
         var files = Directory.EnumerateFiles(vaultPath, "*.md", SearchOption.AllDirectories)
-            .Where(f => !f.Contains(Path.DirectorySeparatorChar + ".obsidian" + Path.DirectorySeparatorChar)
-                     && !f.Contains(Path.DirectorySeparatorChar + ".memctl" + Path.DirectorySeparatorChar));
+            .Where(f => !f.Contains(Path.DirectorySeparatorChar + ".obsidian" + Path.DirectorySeparatorChar));
 
         foreach (var file in files)
         {
