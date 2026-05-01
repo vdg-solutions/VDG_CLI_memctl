@@ -1,19 +1,21 @@
 ---
 id: 30
 type: epic
-title: 'Vault layout V2 — .memctl/ as vault root container'
-status: Todo
+title: Vault layout V2 — .memctl/ as vault root container
+status: Done
 priority: high
-children: [31, 33]
+children:
+- 31
+- 33
 tags:
-  - epic
-  - vault
-  - layout
-  - breaking-change
-  - migration
-  - isolation
-  - skill
-  - plugin
+- epic
+- vault
+- layout
+- breaking-change
+- migration
+- isolation
+- skill
+- plugin
 created: 2026-05-01
 updated: 2026-05-01
 ---
@@ -97,3 +99,7 @@ Epic ships v1.3.0 (vault contract change). MEMCTL_SHARED_VAULT (#29) parked — 
 - Epic Done when all children Done — `/sdlc` Sprint Epic Check (Step 0) auto-closes if sprint has `epic: 30` field.
 - Detailed implementation steps + ACs + tests live in each child backlog.
 - Em delete this body's V1/V2 diagram + child summary if it duplicates with child specs — keep epic body short, children carry detail.
+
+## Comments
+
+**2026-05-01 12:54 user:** Epic complete. Children: #31 Done (V2 foundation), #32 Archived (hard cutover, no migration), #33 Done (docs+version+sync). v1.3.0 ready to ship — anh push tag.

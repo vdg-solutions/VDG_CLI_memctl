@@ -113,3 +113,11 @@
 - Fix: Add design checklist step: "Grep existing path computations involving the moved component". Report findings in design doc § Path computations.
 - Hit count: 1
 - Source: retro analysis #31
+
+### [2026-05-01] — pat_yaml_grep_structural_check_brittle (from retro 33)
+- Severity: low
+- Triggers: [yaml, workflow, grep, structure, github-actions]
+- Pattern: Verifying YAML structure (job dependencies, step ordering, nested fields) via raw grep -B/-A misses because YAML has nested indentation. Line-aware grep can't capture parent-child relationship like `step inside job`.
+- Fix: Use `python -c "import yaml; data=yaml.safe_load(open('...')); assert data['jobs']['x']['needs'] == 'y'"` for structural assertions. Grep only for content-level patterns (specific strings, comment markers).
+- Hit count: 1
+- Source: retro analysis #33

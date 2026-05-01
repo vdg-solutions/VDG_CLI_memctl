@@ -20,3 +20,5 @@
 | 2026-05-01 | Review 28 | — | — | 4.5/5 (inline) | — | APPROVE (PR fallback to local merge) |
 | 2026-05-01 | #31 V2 foundation | PASS | PASS | 5.0/5 | 5.0/5 | 0 |
 | 2026-05-01 | Review 31 | — | — | 4.5/5 (inline) | — | APPROVE (PR fallback to local merge) |
+| 2026-05-01 | #33 V2 docs ship | PASS | PASS | 5.0/5 | 5.0/5 | 0 |
+| 2026-05-01 | Review 33 | — | — | 4.6/5 (inline) | — | APPROVE (PR fallback to local merge) |

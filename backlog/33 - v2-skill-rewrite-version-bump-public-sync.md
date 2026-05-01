@@ -2,7 +2,7 @@
 id: 33
 type: task
 title: V2 docs ship — skill rewrite + plugin README + version 1.3.0 + public memctl-releases sync
-status: In Progress
+status: Done
 priority: high
 parent: 30
 tags:
@@ -299,3 +299,7 @@ curl -sS https://raw.githubusercontent.com/vdg-solutions/memctl-releases/master/
 - Skill text appears in multiple places: `docs/memctl.md` (source) → `plugins/memctl-claude/skills/memctl/SKILL.md` (synced via script) → `vdg-solutions/memctl-releases/SKILL.md` (synced via API or workflow). All 3 must agree post-this-child.
 - Workflow `sync-marketplace` (#28) on next tag push auto-bumps marketplace.json plugin version to 1.3.0 — no manual marketplace edit needed.
 - After v1.3.0 ships and is verified, em can revisit #29 (MEMCTL_SHARED_VAULT env var) — V2 makes per-project natural; env var fallback may still be useful for personal global vault. Anh decides.
+
+## Comments
+
+**2026-05-01 12:54 user:** Pipeline complete. Merged 8110f1d. 49/49 tests pass. v1.3.0 versions atomic. Public memctl-releases synced (3 files, 200 OK). Retro at docs/retros/33-retro.md. Epic #30 ready to close.
