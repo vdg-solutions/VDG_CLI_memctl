@@ -114,8 +114,7 @@ Goal: tag `v*` push → tất cả version bumps tự đồng bộ. User không 
 
 ### Step 3 — Document version bump runbook
 
-- **File CREATE:** `docs/release-runbook.md` (covered by sister task — write release SOP for future bots)
-- **File MODIFY:** `docs/release-runbook.md` — add "automated steps" section pointing at this workflow
+- **File MODIFY:** `docs/release-runbook.md` — replace Step 5 manual marketplace update block with "automated by workflow #28" pointer; replace "after task #28 ships" forward-references with "as of v1.x.y" past-tense; add new section "Workflow internals — verify-versions + sync-marketplace job chain" describing the 2 new jobs.
 
 ### Step 4 — Smoke test
 
