@@ -944,47 +944,79 @@ Most maintenance runs **WITHOUT LLM** (cheap, deterministic, free). LLM only req
 | Concept gap → rich page draft | ✅ opt-in | LLM writes initial draft if requested |
 | Disambiguation/merge nuanced | ✅ opt-in | Edge cases need LLM judgment |
 
-### Tier 2.5 backend: Haiku default + local fallback
+### Tier 2.5 backend: OpenAI-compatible API (reuse existing config)
 
-Default backend = Anthropic Claude Haiku 4.5 (best quality/setup ratio).
+Memctl đã có `--llm-url`/`--llm-model`/`--llm-key` flags (used by `memctl add`/`organize`). Tier 2.5 reuses same pattern — anh point at ANY OpenAI-compatible endpoint.
 
 ```bash
-# Default (Haiku):
-memctl config set tier2.5.backend haiku
-memctl config set tier2.5.api-key "sk-ant-..."
+# Anthropic Claude Haiku 4.5 (recommended default — quality/cost best)
+memctl config set llm.url      "https://api.anthropic.com/v1"
+memctl config set llm.model    "claude-haiku-4-5-20251001"
+memctl config set llm.key      "sk-ant-..."
 # Cost: ~$0.36/month typical usage
 
-# Privacy-first / offline (local):
-memctl config set tier2.5.backend gemma3-1b
-# Auto-downloads model first call to ~/.memctl/models/gemma3-1b/
-# Cost: $0, ~600MB disk, ~1GB RAM when loaded
+# OpenAI gpt-4o-mini
+memctl config set llm.url      "https://api.openai.com/v1"
+memctl config set llm.model    "gpt-4o-mini"
+memctl config set llm.key      "sk-..."
 
-# Strong reasoning local alternative:
-memctl config set tier2.5.backend qwen2.5-1.5b
+# VDG proxy (anh's existing setup with gemma/qwen self-hosted)
+memctl config set llm.url      "http://127.0.0.1:1234/v1"
+memctl config set llm.model    "gemma4:31b-cloud"
+memctl config set llm.key      "$PROXY_KEY"
+
+# Local llama.cpp server (offline, $0, runs Gemma/Qwen/etc. local)
+memctl config set llm.url      "http://localhost:8080/v1"
+memctl config set llm.model    "gemma-3-1b-instruct"
+# (no key needed local)
+
+# Local Ollama
+memctl config set llm.url      "http://localhost:11434/v1"
+memctl config set llm.model    "qwen2.5:1.5b"
 
 # Disable Tier 2.5 entirely (degrade to Tier 1+2 only):
-memctl config set tier2.5.backend none
+memctl config set llm.url ""
 ```
 
-**Privacy:** Haiku backend sends note text + classification prompts to Anthropic API. Same trust as Tier 3 Claude in Code session (vault content already exposed when bot reads). Local backend keeps content 100% on machine.
+Same flags work as CLI args per-call:
+```bash
+memctl maintain --llm-url ... --llm-model ... --llm-key ...
+```
 
-**Use cases per backend:**
+Or set once in `~/.memctl/config.json`, reused by all memctl commands (Tier 2.5 distill, semantic lint, source synthesis, organize).
 
-| Op | Haiku | Gemma 3 1B local | Tier 1+2 only |
-|----|-------|------------------|---------------|
-| Auto-promote tentative | ✅ ~95% accurate | ✅ ~80% | ❌ |
-| Detect 'remember this' implicit | ✅ ~95% | ✅ ~75% | ⚠ regex literal only |
-| Contradiction detection (basic) | ✅ ~90% | ✅ ~70% | ❌ |
-| 1-line synthesis | ✅ ~90% | ⚠ ~70% | ❌ |
-| Concept gap suggestion | ✅ ~85% | ⚠ ~65% | ❌ |
+### Backend recommendations
 
-**Dimensions to choose:**
-- Privacy critical → local
-- Cost-sensitive long-term → local
-- Quality matters → Haiku
-- Setup simplicity → Haiku
-- Internet absent → local
-- Default → Haiku
+| Endpoint | Quality (Tier 2.5 ops) | Cost | Privacy | Internet |
+|----------|------------------------|------|---------|----------|
+| **Anthropic Haiku 4.5** ⭐ | ~95% | ~$0.36/mo | content → Anthropic | required |
+| **OpenAI gpt-4o-mini** | ~95% | ~$0.40/mo | content → OpenAI | required |
+| **VDG proxy (gemma/qwen)** | ~80-85% | varies (anh's setup) | content → anh proxy | required |
+| **Local llama.cpp + Gemma 3 1B** | ~75% | $0 + 600MB disk | 100% local | not required |
+| **Local Ollama + Qwen 2.5 1.5B** | ~85% | $0 + 1.2GB disk | 100% local | not required |
+| **Local llama.cpp + Phi-4-mini** | ~88% | $0 + 2.5GB disk | 100% local | not required |
+
+**Default em recommend Haiku** — quality tốt, cost thấp, no setup hassle. Privacy-conscious anh swap sang local llama.cpp/Ollama.
+
+### Privacy
+
+Endpoint chosen determines exposure:
+- Cloud (Anthropic/OpenAI/VDG proxy) → vault content sent over network
+- Local (llama.cpp/Ollama) → 100% on machine
+
+Same trust boundary as Tier 3 Claude in Code session for cloud endpoints (vault content already exposed when bot reads context).
+
+### Use cases per quality tier
+
+| Op | ~95% (Haiku/4o-mini) | ~85% (Qwen local) | ~75% (Gemma 1B local) | Regex/embedding only |
+|----|----------------------|-------------------|----------------------|---------------------|
+| Auto-promote tentative | ✅ | ✅ | ⚠ | ❌ |
+| Detect implicit 'remember' | ✅ | ✅ | ⚠ | ❌ |
+| Contradiction detection | ✅ | ✅ | ⚠ | ❌ |
+| 1-line synthesis | ✅ | ⚠ | ⚠ | ❌ |
+| Concept gap suggestion | ✅ | ⚠ | ⚠ | ❌ |
+
+Below ~75% quality, recommend disable Tier 2.5 (regex/embedding suffice for ~80% value already).
 
 ### Default operating model (LLM always available)
 
