@@ -169,15 +169,22 @@ Mặc dù hooks đã handle 90% use case auto, vẫn cần slash commands cho l�
       {
         "name": "memctl",
         "description": "Zero-config persistent memory for Claude Code via memctl vault CLI",
-        "source": "github:vdg-solutions/memctl-releases",
-        "path": "plugins/memctl-claude",
-        "version": "1.0.0",
+        "author": { "name": "vdg-solutions", "url": "https://github.com/vdg-solutions/memctl-releases" },
         "category": "memory",
-        "tags": ["memory", "vault", "obsidian", "context"]
+        "tags": ["memory", "vault", "obsidian", "context"],
+        "version": "1.2.0",
+        "homepage": "https://github.com/vdg-solutions/memctl-releases",
+        "source": {
+          "source": "git-subdir",
+          "url": "https://github.com/vdg-solutions/memctl-releases.git",
+          "path": "plugins/memctl-claude",
+          "ref": "master"
+        }
       }
     ]
   }
   ```
+  > **Source format note:** Claude Code 2.1+ requires `source` as object `{source, url, path, ref}` (`git-subdir` source type), NOT string `"github:owner/repo"`. The source repo MUST be PUBLIC — Claude Code clones via HTTPS without auth. That's why `path` points to `plugins/memctl-claude` inside `memctl-releases` (public release host) rather than the private source repo.
 - **Per-release copy:** workflow `release.yml` (#25) extends to copy `plugins/memctl-claude/` vào `vdg-solutions/memctl-releases/plugins/memctl-claude/` mỗi tag.
 
 ### Step 6 — Install UX

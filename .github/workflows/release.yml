@@ -160,6 +160,30 @@ jobs:
             --notes-file release-notes.md \
             release/*
 
+      - name: Sync plugin source to release repo
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_REPO_PAT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          REL=/tmp/release-repo
+          rm -rf "$REL"
+          git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${RELEASE_REPO}.git" "$REL"
+          rm -rf "$REL/plugins/memctl-claude"
+          mkdir -p "$REL/plugins"
+          cp -r plugins/memctl-claude "$REL/plugins/"
+          cd "$REL"
+          git config user.email "actions@github.com"
+          git config user.name "release-pipeline"
+          git add plugins/memctl-claude
+          if git diff --staged --quiet; then
+            echo "::notice::plugin source unchanged, skip sync"
+            exit 0
+          fi
+          git commit -m "chore: sync plugin source to ${GITHUB_REF_NAME}"
+          git push
+          echo "::notice::plugin source synced to ${GITHUB_REF_NAME}"
+
   sync-marketplace:
     needs: release
     if: ${{ !contains(github.ref_name, '-') }}

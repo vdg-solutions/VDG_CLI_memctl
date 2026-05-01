@@ -154,6 +154,25 @@ Runs after `release` job succeeds. Skipped via `if: !contains(github.ref_name, '
 
 Failure isolated — does NOT roll back uploaded release artifacts. PAT scope or rate-limit issues only block marketplace update; users still get binaries.
 
+### Sync plugin source to release repo (release job, last step)
+
+After `gh release create` succeeds, the `release` job clones `vdg-solutions/memctl-releases` (using `RELEASE_REPO_PAT`), removes the existing `plugins/memctl-claude/` directory, copies the current source from this repo, and commits + pushes if there's a diff. Required because Claude Code marketplace clones plugin source from `memctl-releases` (public) — when the local `plugins/memctl-claude/` changes, the public copy must propagate, otherwise `claude plugin update memctl@vdg-solutions` fetches a stale plugin.
+
+Commit message format: `chore: sync plugin source to <tag>`. Idempotent — no commit if `git diff --staged --quiet` returns true.
+
+### Marketplace.json `source` format (Claude Code 2.1+)
+
+```json
+"source": {
+  "source": "git-subdir",
+  "url": "https://github.com/vdg-solutions/memctl-releases.git",
+  "path": "plugins/memctl-claude",
+  "ref": "master"
+}
+```
+
+NOT the legacy string format `"source": "github:owner/repo"`. The source repo MUST be public — Claude Code does not authenticate when cloning marketplace sources. That's why plugin source lives at `vdg-solutions/memctl-releases/plugins/memctl-claude/` (public) and is auto-synced from the private source repo each release.
+
 Trigger: `tags: ['v*']` or `workflow_dispatch` manual.
 
 Third-party Actions pinned to commit SHA (NFR-1). When bumping action versions, find new SHA via:
