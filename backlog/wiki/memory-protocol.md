@@ -42,15 +42,18 @@ Latency: next user-prompt cycle. Not real-time parallel — but anh's working se
 4. **Confidence threshold.** Hook-side regex creates `confidence-tentative` candidate. Bot in next response promotes to `confidence-proven` only if context confirms.
 5. **Token discipline by convention.** Maintenance work terse (1-2 lines per op, brief announcements). No hard cap (LLM can't measure own usage); discipline via brevity rule. Heavy ops batched to /qc-dream skill events.
 
-### Tier responsibility split
+### Tier responsibility split (4 tiers)
 
-| Tier | Actor | When |
-|------|-------|------|
-| **Tier 1 — regex/counter/math** | External hook commands (memctl CLI) | Real-time per-event |
-| **Tier 2 — embedding ops** | External hook commands (gemma model in process) | Real-time per-event |
-| **Tier 3 — LLM reasoning** | Bot in session via inbox pattern | Next user-prompt-response cycle |
+| Tier | Actor | When | Cost |
+|------|-------|------|------|
+| **Tier 1 — regex/counter/math** | External hook commands (memctl CLI) | Real-time per-event | $0 |
+| **Tier 2 — embedding ops** | External hook commands (gemma 300M loaded) | Real-time per-event | $0 |
+| **Tier 2.5 — subconscious LLM** | External hook commands → Haiku API (default) OR local Gemma 3 1B | WARM async per-event (~300-800ms) | ~$0.36/mo Haiku, $0 local |
+| **Tier 3 — Claude bot in session** | Bot via inbox pattern | Next user-prompt-response cycle | $0 (session tokens) |
 
-Vault works without bot (Tier 1+2 cover ~80% value). With bot (assumed default), Tier 3 catches up via inbox latency = next prompt.
+Vault works without bot (Tier 1+2+2.5 cover ~95% value). With bot (assumed default), Tier 3 catches up via inbox latency = next prompt.
+
+**Tier 2.5 (subconscious) closes the gap** — handles nuanced classification ops không-LLM tier 1+2 không thể giải quyết, without waiting for Claude session. Haiku quality ~90% vs Tier 3 Claude full session.
 
 ### Edge case: bot session absent
 
@@ -123,41 +126,56 @@ Human-memory metaphor: hippocampus auto-records, sleep consolidates, cortex surf
 
 | Tier | Latency | Trigger | Operations |
 |------|---------|---------|------------|
-| **HOT** | <200ms | UserPromptSubmit hook | Read precomputed top-N cache + Layer 1+2 inject |
-| **WARM** | <5s, async non-blocking | Stop hook | Capture chat + distill turn + log append + hit_count refresh |
-| **COLD** | minutes, opportunistic | /retro + /qc-dream + sprint-close + every K-th Stop + manual `memctl maintain` | Consolidate, promote, decay, re-score, lint, rebuild cache |
+| **HOT** | 200-500ms (real, hardware-dependent) | UserPromptSubmit hook | Read precomputed top-N cache + Layer 1+2 inject + bot-todo inject |
+| **WARM** | <5s, async non-blocking | Stop hook | Capture chat + Tier 1 distill + Tier 2 embedding ops + Tier 2.5 LLM classify (Haiku/Gemma) + log append + hit_count refresh |
+| **COLD** | minutes, opportunistic | /retro + /qc-dream + sprint-close + every K-th Stop + pressure breach | Consolidate, promote, decay, re-score, lint, rebuild cache, SQLite vacuum |
 
 **No daemon, no scheduled service.** Each tier piggy-backs on natural workflow events.
 
-### Hot path budget
+WARM tier expanded với Tier 2.5 (subconscious LLM) — bridges gap between deterministic ops (1, 2) và bot-in-session reasoning (3).
+
+### Hot path budget (honest realistic)
 
 ```
 context-inject input: user prompt
 1. Vault locator walk-up         <5ms
-2. Embed prompt (model preloaded) <50ms
-3. Read Layer 0 (identity)       <5ms
-4. Read precomputed Layer 1 cache <5ms
-5. Search Layer 2 (BM25+semantic) <80ms
-6. MMR rerank Layer 2            <20ms
-7. Format markdown               <5ms
-                                  ─────
-                                  ~170ms
+2. Read pressure.json (shim)     <2ms
+3. Embed prompt (gemma cached)    50-200ms (CPU vs GPU varies)
+4. Read Layer 0 identity + bot-todo (must-see)  <10ms
+5. Read precomputed Layer 1 cache <10ms
+6. Search Layer 2 (BM25+semantic) 50-150ms
+7. MMR rerank Layer 2            10-30ms
+8. Format markdown               <5ms
+                                  ──────────
+                                  ~150-400ms typical
+                                  ~500ms worst case (CPU, 5000+ notes)
 ```
 
-Strict budget — anything blocking > 200ms moves to WARM tier.
+**Target 200ms — real range 150-500ms depending on hardware.** Profile + tune per machine. Anything blocking > 500ms moves to WARM async.
 
-### Warm path (post-response, async)
+**Bot-todo MUST be in Layer 0 always-on tier** (alongside identity) so bot literally cannot miss pending work-items. Token budget: Layer 0 ~150-200 tokens cap (identity + 1-3 todo items).
+
+### Warm path (post-response, async, ~5s budget)
 
 ```
-Stop hook spawns:
-  capture (existing)            — write raw turn to chats/
-  distill (new)                 — regex/heuristic signal extraction
-  log append (new)              — append LOG.md entry
-  hit_count refresh (new)       — bump access count on read notes
-  pressure metrics update (new) — track unconsolidated_turns counter
+Stop hook spawns sequence:
+  Tier 1 ops:
+    capture (existing)         — write raw turn to chats/{date}.md
+    distill regex (new)        — regex signal extraction
+    log append (new)           — append LOG.md entry
+    hit_count refresh (new)    — bump access count
+    pressure metrics update    — track counters
+  Tier 2 ops:
+    embedding similarity check — compare new note to existing same-tag
+    cluster suggestions        — k-means/HDBSCAN over recent additions
+  Tier 2.5 ops (subconscious):
+    LLM classify ambiguous     — "is this signal important?" yes/no
+    auto-promote tentative     — Haiku judges 2-signal candidates
+    auto-supersede detection   — "X supersedes Y" semantic match
+    flag bot-todo for Tier 3   — escalate complex items to Claude inbox
 ```
 
-All non-blocking. Next user prompt doesn't wait.
+All non-blocking. Next user prompt doesn't wait. Tier 2.5 calls (Haiku ~300-800ms or local ~150-300ms) fit budget.
 
 ### Cold path (event-triggered)
 
@@ -925,6 +943,48 @@ Most maintenance runs **WITHOUT LLM** (cheap, deterministic, free). LLM only req
 | **Source synthesis (10-15 page updates per source)** | ✅ required | Extract entities, decide which pages update, write summaries — only Mode B or external LLM |
 | Concept gap → rich page draft | ✅ opt-in | LLM writes initial draft if requested |
 | Disambiguation/merge nuanced | ✅ opt-in | Edge cases need LLM judgment |
+
+### Tier 2.5 backend: Haiku default + local fallback
+
+Default backend = Anthropic Claude Haiku 4.5 (best quality/setup ratio).
+
+```bash
+# Default (Haiku):
+memctl config set tier2.5.backend haiku
+memctl config set tier2.5.api-key "sk-ant-..."
+# Cost: ~$0.36/month typical usage
+
+# Privacy-first / offline (local):
+memctl config set tier2.5.backend gemma3-1b
+# Auto-downloads model first call to ~/.memctl/models/gemma3-1b/
+# Cost: $0, ~600MB disk, ~1GB RAM when loaded
+
+# Strong reasoning local alternative:
+memctl config set tier2.5.backend qwen2.5-1.5b
+
+# Disable Tier 2.5 entirely (degrade to Tier 1+2 only):
+memctl config set tier2.5.backend none
+```
+
+**Privacy:** Haiku backend sends note text + classification prompts to Anthropic API. Same trust as Tier 3 Claude in Code session (vault content already exposed when bot reads). Local backend keeps content 100% on machine.
+
+**Use cases per backend:**
+
+| Op | Haiku | Gemma 3 1B local | Tier 1+2 only |
+|----|-------|------------------|---------------|
+| Auto-promote tentative | ✅ ~95% accurate | ✅ ~80% | ❌ |
+| Detect 'remember this' implicit | ✅ ~95% | ✅ ~75% | ⚠ regex literal only |
+| Contradiction detection (basic) | ✅ ~90% | ✅ ~70% | ❌ |
+| 1-line synthesis | ✅ ~90% | ⚠ ~70% | ❌ |
+| Concept gap suggestion | ✅ ~85% | ⚠ ~65% | ❌ |
+
+**Dimensions to choose:**
+- Privacy critical → local
+- Cost-sensitive long-term → local
+- Quality matters → Haiku
+- Setup simplicity → Haiku
+- Internet absent → local
+- Default → Haiku
 
 ### Default operating model (LLM always available)
 
