@@ -1,18 +1,18 @@
 ---
 id: 33
 type: task
-title: 'V2 docs ship — skill rewrite + plugin README + version 1.3.0 + public memctl-releases sync'
-status: Todo
+title: V2 docs ship — skill rewrite + plugin README + version 1.3.0 + public memctl-releases sync
+status: In Progress
 priority: high
 parent: 30
 tags:
-  - docs
-  - skill
-  - plugin
-  - version
-  - sync
-  - release
-  - layout-v2
+- docs
+- skill
+- plugin
+- version
+- sync
+- release
+- layout-v2
 created: 2026-05-01
 updated: 2026-05-01
 ---

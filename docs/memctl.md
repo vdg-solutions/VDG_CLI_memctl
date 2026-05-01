@@ -75,6 +75,73 @@ Until G3 ships, manually ask the bot: *"Review my vault and clean up duplicates/
 
 ---
 
+## Vault layout (V2.1 as of v1.3.0)
+
+`memctl init --vault <project-anchor>` creates `<project-anchor>/.memctl/` as the vault root container:
+
+```
+<project-anchor>/                ← project repo, $HOME, anywhere
+├── .memctl/                     ← vault root (Obsidian opens here)
+│   ├── .obsidian/               ← Obsidian config (auto-hidden in Obsidian)
+│   │   └── memctl/              ← memctl runtime (nested, hidden)
+│   │       ├── index.db
+│   │       └── hook.log
+│   ├── tasks/                   ← /sdlc per-phase artifacts
+│   ├── patterns/                ← /retro error patterns
+│   ├── lessons/                 ← /qc-dream wisdom
+│   ├── decisions/               ← /design ADRs
+│   ├── chats/                   ← Stop hook daily-rollups (YYYY-MM-DD.md)
+│   ├── attachments/             ← images, binaries
+│   ├── claude-memory/MEMORY.md  ← top-level index
+│   └── *.md                     ← ad-hoc user notes
+├── src/                         ← project files OUTSIDE .memctl/ are NOT indexed
+└── README.md                    ← also not indexed
+```
+
+Memctl walks up from cwd looking for `.memctl/` containing `.obsidian/`. Per-project install is the natural default — projects with their own `.memctl/` always resolve to themselves first, no env var needed.
+
+To open vault in Obsidian app: open `<project-anchor>/.memctl/` as the vault folder.
+
+Models live user-global at `~/.memctl/models/embeddinggemma-300m/` — shared across vaults, not per-vault.
+
+### Writer ownership
+
+| Subdir | Writer | Mutate |
+|--------|--------|--------|
+| `tasks/` | /sdlc orchestrator | append per phase (task-{id}-{phase}.md) |
+| `patterns/` | /retro post-merge | mutate hit_count |
+| `lessons/` | /qc-dream | dedupe + merge |
+| `decisions/` | /design | append-only ADR (adr-{NNNN}-{slug}.md) |
+| `chats/` | Stop hook (`memctl capture`) | append into daily file |
+| `attachments/` | tool/hook output | append-only |
+| `claude-memory/MEMORY.md` | /qc-dream consolidation | rewrite (compress) |
+
+---
+
+## Upgrading from V1 (pre-v1.3.0)
+
+**Hard cutover — no automatic migration.** If you have a V1 vault (`.obsidian/` + `.memctl/` siblings at project root), do this manually:
+
+```bash
+# 1. Move V1 vault aside (preserves notes for manual recovery)
+mkdir -p <project>/.archived-v1-vault
+mv <project>/.memctl   <project>/.archived-v1-vault/.memctl
+mv <project>/.obsidian <project>/.archived-v1-vault/.obsidian
+
+# 2. Init fresh V2 vault
+memctl init --vault <project>
+
+# 3. (optional) Copy any .md notes from .archived-v1-vault/ into <project>/.memctl/
+cp <project>/.archived-v1-vault/*.md  <project>/.memctl/  2>/dev/null || true
+
+# 4. Rebuild index
+memctl ingest --vault <project>/.memctl
+```
+
+Add `.archived-v1-vault/` to `.gitignore` so old vault doesn't leak into commits.
+
+---
+
 ## Installation
 
 ```bash
@@ -87,7 +154,7 @@ dotnet tool install -g memctl --add-source ./nupkg
 
 | Option | Required | Description |
 |--------|----------|-------------|
-| `--vault <path>` | No (auto-detected from cwd if omitted) | Vault directory — walks up from cwd looking for `.obsidian/`. Required for `init`. |
+| `--vault <path>` | No (auto-detected from cwd if omitted) | Vault directory — walks up from cwd looking for `.memctl/` containing `.obsidian/`. Required for `init`. |
 | `--limit <n>` | No (default: 10) | Max results |
 | `--llm-url <url>` | For add/organize | OpenAI-compatible API URL |
 | `--llm-model <model>` | For add/organize | Model name |
@@ -99,7 +166,7 @@ dotnet tool install -g memctl --add-source ./nupkg
 
 **Always run `status` before the first use of a vault.** This tells you if the embedding model is downloaded and the vault is indexed — without triggering a blocking download.
 
-`--vault` is optional if you run from inside a project with a `.obsidian/` directory — memctl auto-detects upward. Examples below use explicit `--vault` for clarity.
+`--vault` is optional if you run from inside a project with a `.memctl/` directory containing `.obsidian/` — memctl auto-detects upward. Examples below use explicit `--vault` for clarity.
 
 ```bash
 memctl status --vault ./vault
@@ -163,9 +230,10 @@ memctl ingest --vault ./vault   # mandatory after switching
 ```
 
 ### `init`
-Create a new vault with `.obsidian/` and `.memctl/` structure.
+Create a new V2.1 vault: `.memctl/` container with nested Obsidian config + 7 semantic subdirs (tasks, patterns, lessons, decisions, chats, attachments, claude-memory). Pass parent dir or direct `.memctl/` path — both work.
 ```bash
-memctl init --vault ./my-vault
+memctl init --vault ./my-project       # creates ./my-project/.memctl/
+memctl init --vault ./my-project/.memctl   # equivalent (direct path)
 ```
 
 ### — Encode (write to memory) —
@@ -313,7 +381,7 @@ memctl organize --vault ./vault --since 2026-03-01 --llm-url ...  # only recent 
 
 Run memctl as a stdio MCP server. Exposes 13 tools to any MCP-compatible client (Claude Code, Cursor, etc.).
 
-`--vault` is optional — memctl auto-detects the vault by walking up from the cwd where the MCP server is spawned. Place your vault (with `.obsidian/`) in the project root and the config becomes zero-config.
+`--vault` is optional — memctl auto-detects the vault by walking up from the cwd where the MCP server is spawned. Place your vault (with `.memctl/.obsidian/`) anywhere along the project path and the config becomes zero-config.
 
 ```bash
 memctl mcp              # auto-detects vault from cwd
