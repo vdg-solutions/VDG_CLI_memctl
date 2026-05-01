@@ -59,6 +59,39 @@ Vault works without bot (Tier 1+2+2.5 cover ~95% value). With bot (assumed defau
 
 If anh runs `memctl <cmd>` from CLI standalone (no Claude Code), Tier 3 work piles up in bot-todo. Next time anh open Claude Code, bot processes accumulated inbox in first response. No data loss; latency = "next session start".
 
+Tier 2.5 (subconscious LLM via OpenAI-compat) covers nuanced ops while bot away → bot-todo only accumulates complex multi-step items. Vault stays maintained autonomously.
+
+### Bot-todo schema
+
+`<vault>/.obsidian/memctl/bot-todo.md` — append-only, bot processes top-N by priority, removes processed entries:
+
+```yaml
+# bot-todo.md
+items:
+  - id: 2026-05-01-001
+    type: review-tentative          # review-tentative | audit-action | supersede-decision | lint-contradiction | synthesize-source | resolve-merge
+    target: decisions/adr-0042
+    reason: "single-signal, needs context confirmation"
+    created: 2026-05-01T10:30:00Z
+    priority: normal                # normal | high
+    payload:                        # optional structured data per type
+      candidate_signals: ["mentioned 1×"]
+      proximity: 5_turns_ago
+  - id: 2026-05-01-002
+    type: audit-action
+    target: pinned/2026-04-30
+    reason: "auto-pinned via 'remember' phrase, verify importance"
+    priority: high
+    payload:
+      action: "pinned"
+      original_signal: "remember this"
+      surrounding_context: 3_turns
+```
+
+Bot reads via context-inject Layer 0 (must-see). Processes top-N high-priority first. Removes processed entries via memctl call.
+
+Schema versioned via top-level `schema_version: 1` field for future evolution.
+
 ---
 
 ## §0 Goals
@@ -165,9 +198,12 @@ Stop hook spawns sequence:
     log append (new)           — append LOG.md entry
     hit_count refresh (new)    — bump access count
     pressure metrics update    — track counters
-  Tier 2 ops:
-    embedding similarity check — compare new note to existing same-tag
-    cluster suggestions        — k-means/HDBSCAN over recent additions
+  Tier 2 ops (scale-aware):
+    embedding similarity check — same-tag scope only (<100 notes typical/room)
+                                  → 50× faster than naive pairwise full vault
+                                  → 5000+ vault notes: ANN (HNSW) deferred wishlist
+    cluster suggestions        — k-means/HDBSCAN over recent additions only
+                                  (last 7 days, not full vault)
   Tier 2.5 ops (subconscious):
     LLM classify ambiguous     — "is this signal important?" yes/no
     auto-promote tentative     — Haiku judges 2-signal candidates
@@ -1097,6 +1133,177 @@ User effort:
 - Ask questions (normal Claude Code use)
 - Periodic `memctl maintain --full` when status shows recommended (or set auto)
 - Review tentative notes queue periodically (low priority)
+
+---
+
+## §14a Long-session bot reliability
+
+Bot context window finite (Sonnet 200K, Opus 200K, but compaction happens). Bot in turn 50+ may have lost early-session context. Maintenance reliability drops late session.
+
+**Mitigation: front-loaded maintenance.**
+
+| Session phase | Bot maintenance behavior |
+|---------------|-------------------------|
+| First 5 turns (context fresh) | Process bot-todo aggressively, audit, distill nuanced |
+| Turns 6-30 | Light maintenance — Tier 2.5 handles routine, bot only escalations |
+| Turn 30+ (compaction risk) | Skip routine maintenance entirely; only critical signals (anh explicit "remember") |
+| Next session resume | Bot re-reads bot-todo + LOG.md last 20 entries → catch up missed |
+
+Skill instruction includes turn-counter awareness (heuristic via session age or transcript length). Bot self-throttles maintenance work as session deepens.
+
+---
+
+## §14b Long-term scale concerns (5+ years)
+
+### SQLite vault size
+
+| Year | Note count estimate | index.db size | Action |
+|------|---------------------|---------------|--------|
+| 1 | ~500 | <50MB | None |
+| 2 | ~1500 | ~100MB | Quarterly vacuum (cold path) |
+| 3 | ~3000 | ~250MB | Vacuum + chats archive >1yr to chats/archive/YYYY/ |
+| 5+ | ~5000+ | ~500MB+ | + ANN index for embedding search if hot path > 500ms |
+
+`PRAGMA vacuum;` runs in cold path quarterly when notes > 1000. Chats archive automatic when > 1 year old.
+
+### Embedding model upgrades
+
+When new embedder ships (e.g., Gemma 3 2B replaces Gemma 300M):
+- Cold path detects model version mismatch
+- Triggers `memctl reindex --upgrade-embedder` (opt-in, takes hours)
+- Re-embeds all notes with new model
+- Old embedder removed after successful upgrade
+
+User opts in — embedder upgrade not automatic (vault disruption risk).
+
+### LLM model drift
+
+When Anthropic upgrades Haiku (5.0 replaces 4.5) hoặc anh swap backend:
+- Tier 2.5 ranking quality may shift
+- Cold path re-ranks Layer 1 cache after detected upgrade (compares last-known-model in pressure.json)
+- No re-embedding needed (Tier 2.5 ≠ embeddings)
+
+### Linguistic drift
+
+Anh's vocabulary may evolve over years ("postgres" → "supabase" → "neon"). Bot in Mode B handles via context (sees conversation, adapts). No specific code change needed — emergent behavior.
+
+### Vault layout schema migration
+
+If protocol V2 → V3 ever needed (unlikely but possible):
+- `memctl migrate-vault --to-version 3` command (parallel to V1→V2 hard cutover, but with read-and-copy pattern from #32 spec)
+- Backward read-only access to old version
+- User opts in to upgrade
+
+---
+
+## §14c Backup, recovery, multi-device
+
+### Backup strategy (user responsibility)
+
+Default: `.memctl/` is local, gitignored. **Memctl không auto-backup.** User picks:
+
+```bash
+# Option A — Git inside vault (recommended):
+cd <project>/.memctl
+git init
+git add .
+git commit -m "vault snapshot"
+# Auto-commit cron weekly: cd <vault> && git add -A && git commit -m "weekly $(date)"
+
+# Option B — Cloud sync (anh chooses):
+rsync -av <project>/.memctl/ user@cloud:/backups/$(hostname)-memctl-$(basename <project>)/
+
+# Option C — System-level snapshots:
+ZFS / Btrfs / Time Machine / Windows File History — vault included if project tree included
+```
+
+### Recovery scenarios
+
+| Scenario | Recovery |
+|----------|----------|
+| Hard drive fail | Restore from backup (Git/cloud/snapshot) |
+| Vault corrupted | `memctl ingest --vault X --rebuild` rebuilds index from .md files (assumes .md intact) |
+| .md files damaged | Restore from backup; memctl can't recover what's not in source |
+| index.db lost | Auto-rebuild on next `memctl ingest` |
+| Hooks broken | Reinstall plugin: `claude plugin install memctl@vdg-solutions` |
+
+### Multi-device
+
+**Memctl không tự sync across devices.** Pick:
+
+```bash
+# Pattern 1 — Single machine primary:
+Desktop = primary writer
+Laptop = read-only via git pull weekly
+
+# Pattern 2 — Sync via Git:
+git push/pull manually between devices
+Conflict resolution: merge .md files (Obsidian-style), regenerate index.db
+
+# Pattern 3 — Cloud-synced filesystem:
+Dropbox/iCloud/OneDrive includes vault
+Caveat: index.db may corrupt if both devices write simultaneously
+       → recommend Git approach instead
+```
+
+Cross-vault sync (multiple projects on multiple machines) explicit out of scope.
+
+---
+
+## §14d Identity note lifecycle
+
+Identity note (Layer 0 always-injected) auto-created and auto-maintained:
+
+### Creation
+
+`memctl init --vault X` creates `<vault>/claude-memory/IDENTITY.md` template:
+
+```yaml
+---
+type: identity
+created: 2026-05-01
+updated: 2026-05-01
+weight: 2.0    # always Layer 0
+---
+
+# About me
+
+(Auto-populated as bot learns from natural conversation. Anh can edit manually if want explicit override.)
+
+## Stack / preferences
+(empty — bot fills in)
+
+## Working style
+(empty — bot fills in)
+
+## Current focus
+(empty — bot fills in)
+```
+
+### Updates (auto via Mode B)
+
+When anh says facts about preferences/role/stack in conversation:
+- "I prefer Postgres over MySQL"
+- "I'm working on memctl"
+- "My style is type-everything"
+- "Don't use emojis in commits"
+
+→ Distill catches identity-tagged signals (Tier 1 regex + Tier 2.5 LLM classify)
+→ Bot in next response updates IDENTITY.md via memctl write
+→ Announces: "Em note this trong identity"
+
+### Consolidation (cold path)
+
+`/qc-dream` re-reads IDENTITY.md + recent identity-tagged notes:
+- Merge duplicates ("anh prefers postgres" mentioned 3 times → consolidate)
+- Compress (keep authoritative statement, drop verbose history)
+- Cap size (~500 tokens max so always fits Layer 0 budget)
+
+Bot has consistent "About me" context every session. Anh không bao giờ phải re-explain stack/preferences.
+
+### Manual override
+
+User-edited IDENTITY.md respected. Bot detects manual edit via `updated` timestamp + frontmatter `manually_edited: true` flag. Auto-updates skip those sections until next manual revision.
 
 ---
 
