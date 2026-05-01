@@ -13,7 +13,30 @@ env:
   RELEASE_REPO: vdg-solutions/memctl-releases
 
 jobs:
+  verify-versions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Compare tag/csproj/plugin versions
+        shell: bash
+        run: |
+          TAG_VER="${GITHUB_REF_NAME#v}"
+          BASE_VER="${TAG_VER%%-*}"
+          CSPROJ_VER=$(grep -oE '<Version>[^<]+' src/memctl/memctl.csproj | sed 's|<Version>||')
+          PLUGIN_VER=$(python3 -c "import json; print(json.load(open('plugins/memctl-claude/.claude-plugin/plugin.json'))['version'])")
+
+          echo "tag=$TAG_VER base=$BASE_VER csproj=$CSPROJ_VER plugin=$PLUGIN_VER"
+
+          if [ "$CSPROJ_VER" != "$BASE_VER" ]; then
+            echo "::error::csproj <Version> $CSPROJ_VER != tag base $BASE_VER"; exit 1
+          fi
+          if [ "$PLUGIN_VER" != "$BASE_VER" ]; then
+            echo "::error::plugin.json version $PLUGIN_VER != tag base $BASE_VER"; exit 1
+          fi
+          echo "::notice::version sync verified — $BASE_VER"
+
   build:
+    needs: verify-versions
     name: build-${{ matrix.rid }}
     strategy:
       fail-fast: false
@@ -75,6 +98,7 @@ jobs:
           if-no-files-found: error
 
   pack-tool:
+    needs: verify-versions
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -135,3 +159,46 @@ jobs:
             --title "${GITHUB_REF_NAME}" \
             --notes-file release-notes.md \
             release/*
+
+  sync-marketplace:
+    needs: release
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update marketplace.json plugin entry
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_REPO_PAT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VER="${GITHUB_REF_NAME#v}"
+          REPO="vdg-solutions/claude-plugins"
+          API="https://api.github.com/repos/$REPO/contents/.claude-plugin/marketplace.json"
+
+          curl -fsSL -H "Authorization: token $GH_TOKEN" "$API" -o /tmp/cur.json
+          SHA=$(python3 -c "import json; print(json.load(open('/tmp/cur.json'))['sha'])")
+          python3 <<PYEOF
+          import json, base64, sys
+          d = json.load(open('/tmp/cur.json'))
+          mp = json.loads(base64.b64decode(d['content']).decode())
+          changed = False
+          for p in mp['plugins']:
+              if p['name'] == 'memctl' and p.get('version') != '$VER':
+                  p['version'] = '$VER'
+                  changed = True
+          if not changed:
+              print('marketplace already at $VER, skip', file=sys.stderr)
+              sys.exit(0)
+          open('/tmp/new.json', 'w').write(json.dumps(mp, indent=2) + '\n')
+          PYEOF
+          if [ ! -f /tmp/new.json ]; then
+            echo "::notice::marketplace already at $VER, no update needed"
+            exit 0
+          fi
+
+          B64=$(base64 -w 0 /tmp/new.json)
+          PAYLOAD=$(printf '{"message":"chore: bump memctl plugin to %s","content":"%s","sha":"%s"}' "$VER" "$B64" "$SHA")
+          curl -fsSL -X PUT -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "$API" -d "$PAYLOAD" -o /tmp/resp.json
+          grep -q '"content"' /tmp/resp.json
+          echo "::notice::marketplace.json bumped to $VER"
