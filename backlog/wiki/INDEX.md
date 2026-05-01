@@ -10,7 +10,8 @@ These are **reference docs**, NOT `/sdlc` intake. `/sdlc` only picks up `backlog
 
 | Doc | Topic |
 |-----|-------|
-| [memory-pipeline.md](memory-pipeline.md) | How vault data flows to/from Claude Code (read/write paths via hooks) |
+| [memory-protocol.md](memory-protocol.md) | **CANONICAL** — single source of truth for ALL memory operations (4 sub-systems × 3 compute tiers + recall design + wiki maintenance + pressure-based maintenance triggers) |
+| [memory-pipeline.md](memory-pipeline.md) | How vault data flows to/from Claude Code (read/write paths via hooks) — superseded by §6 of protocol; kept for HTTP-style overview |
 | [vault-layout.md](vault-layout.md) | V2.1 directory structure + writer ownership matrix |
 
 ## Operations
