@@ -484,10 +484,19 @@ Hot path retrieval enhanced với techniques có empirical evidence proven trên
 | 3 | **Query expansion via NN** — embed query → top-5 nearest notes → extract their TF-IDF terms → expand BM25 query | +15ms | ~15% (synonym coverage) | ON | Vault IS the dictionary — domain-aware |
 | 4 | **Cluster routing** — pre-computed K=20 topic centroids, route query to nearest cluster, narrow scope | +1ms | ~30-50% latency reduction + relevance | ON | Standard ANN/coarse-grained partitioning |
 | 5 | **Identity-aware ranking** — boost notes semantically similar to identity note | +0.1ms/note | ~10% personalization | ON | Embedding personalization standard |
+| 6 | **Wikilink anchor expansion** — top-1 hit → 1-hop wikilink neighbors added to result set | +5ms | ~10-15% (multi-aspect queries) | ON | Karpathy llm-wiki "associative trails"; graph already in index.db |
+| 7 | **PageRank centrality boost** — `score × (1 + 0.15 × log(in_degree + 1))` | +0.1ms (in_degree precomputed cold) | ~5-10% (canonical surfacing) | ON | Standard graph IR; pre-computed quarterly |
+| 8 | **Subgraph clustering** — top-3 hits BFS — if connected via wikilinks, include connecting hubs | +10ms (2-3 graph queries) | ~5-15% (cohesive context) | ON | Niche but cheap; graph is curated signal |
 
-Stack all 5 = ~30-40% improvement over vanilla BM25+semantic on niche personal corpus. $0. Embedding-only.
+Stack all 8 = ~50-60% improvement over vanilla BM25+semantic on niche personal corpus. $0. All embedding + wikilink graph based.
 
-**Honest caveat:** smart retrieval gains have **mixed empirical evidence on niche personal corpora** (vs public benchmark dataset numbers). Target recall hit rate 0.7 achievable with baseline + PRF + cluster routing alone. Other techniques marginal refinement.
+**Why wikilink graph valuable:**
+- Vault is curated knowledge base — links are intentional (anh + bot create deliberately)
+- Unlike public web, vault graph is clean signal (no SEO spam, no link farms)
+- ADRs/lessons reference each other naturally → graph encodes "this concept relates to that"
+- Karpathy llm-wiki philosophy: cross-references = first-class data
+
+**Honest caveat:** smart retrieval gains have **mixed empirical evidence on niche personal corpora** (vs public benchmark dataset numbers). Target recall hit rate 0.7 achievable with baseline + PRF + wikilink anchor + cluster routing alone (top techniques 1+4+6). Other techniques marginal refinement.
 
 ### NOT in default — speculative techniques
 
