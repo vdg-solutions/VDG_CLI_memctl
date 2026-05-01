@@ -12,6 +12,8 @@ for f in backlog/*.md; do
   # skip done/archived items — only lint actionable
   grep -qE '^status:\s*Done'     "$f" && continue
   grep -qE '^status:\s*Archived' "$f" && continue
+  # skip epics — they're parent rollups; ACs/Step0/NFR live in children
+  grep -qE '^type:\s*epic' "$f" && continue
   checked=$((checked+1))
 
   miss() { echo "  MISS [$1] $f"; fail=1; }
