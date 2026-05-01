@@ -8,7 +8,9 @@ This doc supersedes scattered references trong skill bodies + `_memctl-backend.m
 
 ## §-1 Architectural primary: bot in session = the memory engine
 
-Memory exists FOR LLM. **Assume LLM always available** — vault designed around bot in Claude Code session as primary actor. No-LLM standalone = edge case, not designed around.
+Memory exists FOR LLM. **Assume LLM always available — and that LLM is the Claude bot in your Code session.** Vault designed around bot as primary reasoning actor. No external LLM API required by default. No `--llm-url` config burden.
+
+Tier 2.5 (external LLM API for unattended scenarios) is optional escape hatch — skip in default flow.
 
 ### Hook ↔ bot architecture (honest)
 
@@ -42,18 +44,23 @@ Latency: next user-prompt cycle. Not real-time parallel — but anh's working se
 4. **Confidence threshold.** Hook-side regex creates `confidence-tentative` candidate. Bot in next response promotes to `confidence-proven` only if context confirms.
 5. **Token discipline by convention.** Maintenance work terse (1-2 lines per op, brief announcements). No hard cap (LLM can't measure own usage); discipline via brevity rule. Heavy ops batched to /qc-dream skill events.
 
-### Tier responsibility split (4 tiers)
+### Tier responsibility split (3 tiers — simple, no LLM config)
 
-| Tier | Actor | When | Cost |
-|------|-------|------|------|
-| **Tier 1 — regex/counter/math** | External hook commands (memctl CLI) | Real-time per-event | $0 |
-| **Tier 2 — embedding ops** | External hook commands (gemma 300M loaded) | Real-time per-event | $0 |
-| **Tier 2.5 — subconscious LLM** | External hook commands → Haiku API (default) OR local Gemma 3 1B | WARM async per-event (~300-800ms) | ~$0.36/mo Haiku, $0 local |
-| **Tier 3 — Claude bot in session** | Bot via inbox pattern | Next user-prompt-response cycle | $0 (session tokens) |
+| Tier | Actor | When | Cost | Config |
+|------|-------|------|------|--------|
+| **Tier 1 — regex/counter/math** | External hook commands (memctl CLI) | Real-time per-event | $0 | none |
+| **Tier 2 — embedding ops** | External hook commands (gemma 300M loaded) | Real-time per-event | $0 | none |
+| **Tier 3 — Claude bot in session** | Bot via inbox pattern | Next user-prompt-response cycle | $0 (session tokens) | none |
 
-Vault works without bot (Tier 1+2+2.5 cover ~95% value). With bot (assumed default), Tier 3 catches up via inbox latency = next prompt.
+**Default = no LLM API config required.** Anh chỉ cần Claude Code session (which anh has anyway) — bot does all reasoning ops.
 
-**Tier 2.5 (subconscious) closes the gap** — handles nuanced classification ops không-LLM tier 1+2 không thể giải quyết, without waiting for Claude session. Haiku quality ~90% vs Tier 3 Claude full session.
+**Coverage cumulative:**
+- Tier 1+2 alone (no bot): ~80% (deterministic + embedding-augmented)
+- + Tier 3 bot (default): 100%
+
+### Optional Tier 2.5 (advanced — explicit opt-in)
+
+For users wanting maintenance work without Claude session present (e.g., overnight cron, shared vault, totally headless), Tier 2.5 can be added via existing `--llm-url`/`--llm-model`/`--llm-key` flags. **Not in default flow.** Skip §13 backend section unless this scenario applies.
 
 ### Edge case: bot session absent
 
@@ -160,7 +167,7 @@ Human-memory metaphor: hippocampus auto-records, sleep consolidates, cortex surf
 | Tier | Latency | Trigger | Operations |
 |------|---------|---------|------------|
 | **HOT** | 200-500ms (real, hardware-dependent) | UserPromptSubmit hook | Read precomputed top-N cache + Layer 1+2 inject + bot-todo inject |
-| **WARM** | <5s, async non-blocking | Stop hook | Capture chat + Tier 1 distill + Tier 2 embedding ops + Tier 2.5 LLM classify (Haiku/Gemma) + log append + hit_count refresh |
+| **WARM** | <5s, async non-blocking | Stop hook | Capture chat + Tier 1 distill + Tier 2 embedding ops + log append + hit_count refresh + bot-todo writes for Tier 3 escalations |
 | **COLD** | minutes, opportunistic | /retro + /qc-dream + sprint-close + every K-th Stop + pressure breach | Consolidate, promote, decay, re-score, lint, rebuild cache, SQLite vacuum |
 
 **No daemon, no scheduled service.** Each tier piggy-backs on natural workflow events.
@@ -198,17 +205,17 @@ Stop hook spawns sequence:
     log append (new)           — append LOG.md entry
     hit_count refresh (new)    — bump access count
     pressure metrics update    — track counters
-  Tier 2 ops (scale-aware):
+  Tier 2 ops (scale-aware embedding):
     embedding similarity check — same-tag scope only (<100 notes typical/room)
                                   → 50× faster than naive pairwise full vault
-                                  → 5000+ vault notes: ANN (HNSW) deferred wishlist
+                                  → 5000+ vault notes: ANN (HNSW) deferred
     cluster suggestions        — k-means/HDBSCAN over recent additions only
                                   (last 7 days, not full vault)
-  Tier 2.5 ops (subconscious):
-    LLM classify ambiguous     — "is this signal important?" yes/no
-    auto-promote tentative     — Haiku judges 2-signal candidates
-    auto-supersede detection   — "X supersedes Y" semantic match
-    flag bot-todo for Tier 3   — escalate complex items to Claude inbox
+    PRF (pseudo-relevance      — top-3 → centroid → re-search
+      feedback)                  $0, embedding-only smart retrieval
+  Escalate to bot-todo:
+    Ambiguous signals          — write work-item, bot judges in next response
+    Promotion candidates       — bot reviews via inbox
 ```
 
 All non-blocking. Next user prompt doesn't wait. Tier 2.5 calls (Haiku ~300-800ms or local ~150-300ms) fit budget.
@@ -465,6 +472,40 @@ Default λ=0.7 (favor relevance). Prevents 5 dupes of same topic in surfaced top
 | **Confidence rerank** | `confidence_weight` factor in score | Always |
 | **Negative recall** | Include `hall-decision-against`/`rejected` tagged notes | Default include |
 | **Disambiguation** | Multiple matches same topic → list with id+title+date+confidence | When Layer 2 returns >1 strong match |
+
+### Smart retrieval extensions (embedding-only, $0, default ON)
+
+Hot path retrieval enhanced with embedding tricks beyond plain BM25+semantic. All free (gemma 300M already loaded).
+
+| # | Technique | Cost | Quality gain | Default |
+|---|-----------|------|--------------|---------|
+| 1 | **PRF (pseudo-relevance feedback)** — top-3 → centroid → re-search | +10ms | ~10-15% | ON |
+| 2 | **Multi-vector chunk embedding** — embed paragraphs separately, max-sim aggregation | +ingest 3-5×, search same | ~10-20% | ON (post-#35 implementation) |
+| 3 | **Query expansion via NN** — embed query → top-5 nearest notes → extract their TF-IDF terms → expand BM25 query | +15ms | ~15% (synonym coverage) | ON |
+| 4 | **Cluster routing** — pre-computed K=20 topic centroids, route query to nearest cluster, narrow scope | +1ms | ~30-50% latency reduction + relevance | ON |
+| 5 | **Identity-aware ranking** — boost notes semantically similar to identity note (~+20%) | +0.1ms/note | ~10% personalization | ON |
+
+Stack all 5 = ~40-50% improvement over vanilla BM25+semantic. $0. Embedding-only.
+
+### Bot active recall (Tier 3 — when bot needs deeper search)
+
+Bot in session can mid-reasoning invoke smart retrieval via Bash tool — **bot itself does HyDE-style query refinement, no external LLM API needed**:
+
+```
+Bot detects insufficient surface in Layer 1+2 inject
+       ↓
+Bot writes hypothetical answer to query (mid-thinking)
+       ↓
+Bot invokes: memctl search "<hypothetical>" --semantic
+       ↓
+Embedding search uses hypothetical text (Bot effectively did HyDE)
+       ↓
+Bot reads results, integrates into reasoning
+```
+
+Same for query reformulation: bot rewrites ambiguous query naturally during reasoning, then searches reformulated text. **Bot is the LLM** for retrieval refinement — no external API.
+
+Cost: bot session tokens (~300 per refinement). Acceptable for Layer 3 deep search occasional use.
 
 ### Active recall triggers (Channel B/C)
 
@@ -980,7 +1021,15 @@ Most maintenance runs **WITHOUT LLM** (cheap, deterministic, free). LLM only req
 | Concept gap → rich page draft | ✅ opt-in | LLM writes initial draft if requested |
 | Disambiguation/merge nuanced | ✅ opt-in | Edge cases need LLM judgment |
 
-### Tier 2.5 backend: OpenAI-compatible API (reuse existing config)
+### Tier 2.5 (OPTIONAL — skip if anh use Claude Code as primary)
+
+Tier 2.5 ops chạy via OpenAI-compat API (`--llm-url`/`--llm-model`/`--llm-key`). **Not default.** Only useful nếu vault maintained without Claude session present (overnight cron, headless, multiple machines without Claude Code on each).
+
+Default workflow: Anh dùng Claude Code → Tier 3 bot in-session covers all reasoning ops via inbox pattern → Tier 2.5 unnecessary.
+
+Skip rest of this section unless you have a "no Claude session" scenario.
+
+### Tier 2.5 backend (when explicitly opt-in): OpenAI-compatible API
 
 Memctl đã có `--llm-url`/`--llm-model`/`--llm-key` flags (used by `memctl add`/`organize`). Tier 2.5 reuses same pattern — anh point at ANY OpenAI-compatible endpoint.
 
