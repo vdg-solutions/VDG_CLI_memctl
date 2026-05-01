@@ -6,6 +6,26 @@ This doc supersedes scattered references trong skill bodies + `_memctl-backend.m
 
 ---
 
+## §-1 Architectural primary: Mode B as default
+
+**When bot runs trong Claude Code session (`CLAUDECODE=1`), Mode B is the DEFAULT mechanism — not opt-in.** Bot in session = the LLM doing intelligence work for memory ops.
+
+User effort = 0. User commands = 0. Bot natural-language conversation = the API.
+
+Mode A (cheap regex/embedding ops) = fallback when bot session absent. Lower fidelity but vault stays functional.
+
+**Five guarantees of Mode B default:**
+
+1. **No commands to remember.** Anh never types `memctl pin/archive/unarchive`. Bot does via natural language detection.
+2. **Bot self-corrects.** SessionStart audit reverses bot's own mistakes from prior session. No manual recovery.
+3. **Bot proactively volunteers.** Bot announces memory actions in conversation ("noting as ADR-0042"). Anh override via natural "no, don't archive that".
+4. **Confidence threshold prevents false positive.** 2-signal rule + bot semantic confirmation before persistent actions.
+5. **Token budget bounded.** ≤ 10% of session tokens spent on maintenance. Batched (per K=5 turns), async via Stop hook (non-blocking).
+
+This pattern eliminates trade-offs em listed in earlier drafts. The only remaining cost = session tokens (capped); not $$, not user effort, not memory blind spots.
+
+---
+
 ## §0 Goals
 
 Bot ≠ human → no biological memory → blank slate per session. Memory exists để **compound knowledge across sessions/tasks/projects**.
@@ -595,14 +615,51 @@ Cost: ~1ms (stat + parse JSON). Negligible vs subcommand latency.
 
 Default: ALL paths ON. User effort = 0.
 
-### Bot proactive maintain (in Claude Code session)
+### Bot proactive maintain (Mode B default)
 
-When bot runs inside Claude Code session, skill instruction wires bot to act on maintenance recommendation:
+When bot runs inside Claude Code session (`CLAUDECODE=1` env detected — DEFAULT for normal usage), skill instruction wires bot to ALL maintenance ops, not just recommended.
 
 **Skill rule (in `docs/memctl.md`):**
-> When SessionStart hook output contains `data.maintenance.recommended: true`, bot SHOULD invoke `memctl maintain` via Bash tool early in session. For LLM-required ops (semantic lint, source synthesis), bot does it inline: Read flagged notes via Read tool, reason about contradictions/synthesis, save findings via `memctl add` with appropriate tags.
 
-Bot trong session = LLM available → free LLM ops without external API call.
+> Mode B default protocol — bot owns memory work end-to-end:
+>
+> **Per-Stop hook (post-response, batched K=5):**
+> 1. Read last K turns from chats/
+> 2. Distill nuanced signals (not just regex):
+>    - Decisions made and rationale
+>    - Discoveries/findings
+>    - Recurring errors patterns
+>    - Importance markers (explicit + implicit emphasis)
+> 3. Save with appropriate tags + confidence-tentative if single-signal, confidence-proven if 2-signal threshold met
+> 4. Update INDEX.md catalog (add new entries)
+> 5. Append LOG.md entry summarizing actions
+> 6. Announce in conversation if action visible: "I'm noting <X> as ADR-<NNNN>" (anh can override naturally)
+>
+> **Per-SessionStart (audit + maintenance):**
+> 1. Read LOG.md last 10 auto-actions
+> 2. Audit: any action seem wrong (saved trivial, archived important)?
+> 3. Reverse mistakes via memctl (no commands needed — bot does)
+> 4. Read pressure metrics → run cheap ops if breached
+> 5. Continue session normally
+>
+> **Per-conversation natural override:**
+> - Anh nói "no, don't archive that" / "unarchive X" / "this isn't important" / "we don't need this anymore"
+> - Bot detects override pattern → reverses via memctl, no command typed
+> - Anh nói "remember this" / "important" / "boost X" → bot pins with weight 1.5
+>
+> **Token budget:**
+> - Maintenance ops batched per K=5 turns (not every turn)
+> - Async via Stop hook spawn (don't block next prompt)
+> - Cap ≤ 10% of session tokens for maintenance work
+> - Heavy ops (full synthesis, lint) deferred to /qc-dream skill event (less frequent)
+
+Mode B is DEFAULT. Bot trong session does this. No opt-in, no flag.
+
+**Mode A fallback (no Claude Code session — `CLAUDECODE` env unset):**
+- Tier 1 regex distill runs (catches obvious signals)
+- Tier 2 embedding (synonyms, dedup, clustering)
+- Tier 3 LLM ops skipped (or external if `--llm-url` configured)
+- Lower fidelity but vault stays maintained
 
 ### `/memctl-maintain` slash command
 
@@ -839,23 +896,23 @@ Most maintenance runs **WITHOUT LLM** (cheap, deterministic, free). LLM only req
 
 ### Operating modes
 
-**Mode A — Standalone CLI (no Claude Code session):**
-- Cheap ops: auto (shim + hooks)
-- LLM-required ops: 2 paths
-  - Skipped (no LLM key configured) — emit `"skipped: no LLM configured"` notice
+**Mode B — Inside Claude Code session (DEFAULT, `CLAUDECODE=1`):**
+- Bot owns ALL memory ops end-to-end (per §-1 architectural primary)
+- Stop hook spawns bot post-processing for distill (nuanced, not regex)
+- SessionStart spawns bot self-audit + maintenance
+- Bot proactive announces memory actions in conversation
+- Anh natural-language override (no commands)
+- $0 external cost — bot IS the LLM
+- **Token budget:** ≤ 10% session tokens, batched per K=5 turns, async non-blocking
+
+**Mode A — Fallback CLI (no Claude Code session):**
+- Cheap ops only (Tier 1 regex + Tier 2 embedding)
+- Tier 3 LLM ops degraded:
+  - Skipped (no LLM key) — emit `"skipped"` notice
   - External LLM (when `--llm-url` configured) — calls cheap model (e.g. gemma 4B via VDG proxy, ~$0.05/100 notes)
+- Vault stays functional but lower fidelity
 
-**Mode B — Inside Claude Code session (`CLAUDECODE=1` env detected):**
-- Cheap ops: auto (same as Mode A)
-- LLM-required ops: **bot does it itself** — no external API
-  - Memctl emits structured prompt to stdout for bot
-  - Bot reads via Bash tool output
-  - Reasons via internal thinking
-  - Read flagged notes via Read tool (for synthesis)
-  - Saves results via `memctl add` calls
-  - $0 external cost — bot IS the LLM
-
-Mode auto-detected by memctl via env var. User doesn't configure.
+Mode auto-detected by memctl via `CLAUDECODE` env var. User doesn't configure.
 
 **Self-lint mode (explicit, anywhere):**
 - `memctl maintain --force lint --self` → memctl outputs all notes as structured prompt to stdout
@@ -1121,6 +1178,8 @@ Archived notes:
 
 ### Anti-archive (auto-pin via natural conversation)
 
+**Mode B default — bot detects via context, not regex.** Bot reads conversation, judges importance, pins accordingly. Mode A fallback uses regex signals.
+
 **Bot/user không bao giờ type `memctl pin`.** Distill detects explicit signals from conversation turns and auto-pins:
 
 | Signal phrase pattern | Action |
@@ -1166,6 +1225,77 @@ recall pipeline:
 ```
 
 Threshold tunable via pressure config; default behavior covers compound expertise scenarios.
+
+### Bot proactive announce + natural override (Mode B default)
+
+Bot in session announces memory actions as part of conversation flow:
+
+```
+Bot: "Em note this as ADR-0042: V2.1 layout final" 
+       (after anh + bot finalized layout decision)
+
+Anh: "ok"  → confirms
+
+—— OR ——
+
+Anh: "no, don't ADR that, it's still draft"
+       ↓
+Bot detects override → reverses (delete or demote ADR)
+```
+
+```
+Bot: "Em archived 3 stale chats from > 1yr ago"
+
+Anh: "wait, the one about postgres still relevant"
+       ↓
+Bot: read LOG.md → identify the postgres-related archived → unarchive
+```
+
+```
+Anh: "remember this auth flow pattern"
+       ↓
+Bot detects pin signal → memctl add with weight 1.5 + tag pinned
+```
+
+Anh sees activity transparently in conversation — `memctl status` query rarely needed. Override = natural language, no commands.
+
+### Bot self-audit on SessionStart (Mode B default)
+
+When bot enters new Claude Code session, SessionStart hook returns recent auto-actions:
+
+```json
+{
+  "data": {
+    "recent_auto_actions": [
+      {"date": "2026-04-30 16:32", "action": "pinned", "id": "adr-0042", "reason": "signal: 'remember this'"},
+      {"date": "2026-04-30 18:15", "action": "archived", "id": "chat-2025-04-30", "reason": "decay < 0.1"},
+      {"date": "2026-05-01 09:00", "action": "promoted", "id": "pat-postgres-conn", "reason": "hit_count=3"}
+    ]
+  }
+}
+```
+
+Skill rule: bot audits each, reverses suspicious. E.g.:
+
+```
+Bot reviews: "Em pinned 'kế hoạch picnic' from yesterday's chat"
+   → Em judges: this is off-topic (project is memctl, not picnic)
+   → Bot reverses: memctl unarchive + remove pin tag
+   → Bot announces: "Em đã unpin kế hoạch picnic — không liên quan project"
+```
+
+Audit catches Mode B's own mistakes. No manual recovery needed from anh.
+
+### Cost vs trade-offs
+
+**Mode B trade-off (only one):** Token cost on bot session.
+- Maintenance ops consume session tokens (~10% cap via batching + async)
+- Reduces bot's available context for primary work slightly
+- NOT $$ (no external API), NOT user effort, NOT memory blind spots
+
+All other trade-offs (false positives, misses, bot reliability, recovery) **eliminated by bot judgment in-session.**
+
+Mode A trade-offs (fallback): cheap ops lower fidelity. Acceptable when bot session absent.
 
 ---
 
