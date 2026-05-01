@@ -20,21 +20,18 @@ Foundation child of epic #30. Refactor `VaultLocator.Discover()` to walk-up tìm
 |----|------------|----------|------|------------|
 | FR-1 | `<root>/.memctl/.obsidian/` resolved as V2 vault, returned path = `<root>/.memctl/`, strategy `walk-up v2 (.memctl/)` | Must | [unit] | `dotnet test --filter VaultLocatorV2Tests.WalkUp_finds_v2_when_memctl_contains_obsidian` exit 0 |
 | FR-2 | Walk-up V2 from project subdir resolves to `.memctl/` ancestor | Must | [unit] | `dotnet test --filter VaultLocatorV2Tests.WalkUp_finds_v2_from_subdir` exit 0 |
-| FR-3 | Legacy V1 (sibling `.obsidian/` + `.memctl/`) returns strategy `legacy v1 — run memctl migrate-vault` | Must | [unit] | `dotnet test --filter VaultLocatorV2Tests.Legacy_v1_returns_migration_hint` exit 0 |
 | FR-4 | `InitVaultStructure(<parent>)` creates V2.1 layout: `.obsidian/memctl/` runtime + 7 semantic dirs | Must | [unit] | smoke `test -d` per dir all pass |
 | FR-5 | `InitVaultStructure(<path>/.memctl)` direct path skips nesting (no `.memctl/.memctl/`) | Must | [unit] | `dotnet test --filter InitV2Tests.Init_with_direct_memctl_path_skips_nesting` exit 0 |
 | FR-6 | Index.db at `<vault>/.obsidian/memctl/index.db`, hook.log at `<vault>/.obsidian/memctl/hook.log`, models at `<vault>/.obsidian/memctl/models/` | Must | [unit] | smoke: `test -f $TMP/p/.memctl/.obsidian/memctl/index.db` exit 0 post-ingest |
 | FR-7 | EnumerateMarkdownFiles excludes `.obsidian/` only (runtime nested inside, auto-excluded) | Must | [unit] | smoke: `<vault>/foo.md` indexed, `<vault>/.obsidian/memctl/x.md` not indexed |
-| FR-8 | Legacy V1 detection emits stderr `::warning::` annotation + "migrate-vault" hint | Must | [unit] | `dotnet test --filter LegacyWarningTests.Legacy_v1_emits_stderr_warning` exit 0 |
-| FR-9 | StatusOperator JSON includes `data.legacy_v1: true` + `data.migration_hint` when legacy detected | Should | [unit] | smoke: `memctl status --vault <V1-fixture> --json` parses + `legacy_v1: true` |
 
 ## 4. Non-Functional Requirements
 
 | ID | Category | Requirement | Acceptance |
 |----|----------|------------|-----------|
 | NFR-1 | Build | 0 warning, 0 error | `dotnet build -c Release` clean |
-| NFR-2 | Regression | All 42 existing tests pass + 9 new = 51 total | `dotnet test --nologo` "Passed: 51" |
-| NFR-3 | No migration yet | `migrate-vault` command NOT registered | `grep -c "migrate-vault" src/memctl/Bootstrap/Program.cs` returns 0 |
+| NFR-2 | Regression | All 42 existing tests pass + 7 new = 49 total | `dotnet test --nologo` "Passed: 49" |
+| NFR-3 | No migration | `migrate-vault` command NOT registered (V1 hard-cutover, no back-compat per anh's directive) | `grep -c "migrate-vault" src/memctl/Bootstrap/Program.cs` returns 0 |
 
 ## 5. Edge Cases
 
