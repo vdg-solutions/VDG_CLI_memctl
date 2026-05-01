@@ -1,15 +1,15 @@
 ---
 id: 29
 type: task
-title: 'Vault MEMCTL_SHARED_VAULT env var — shared-mode opt-in (lowest priority)'
+title: Vault MEMCTL_SHARED_VAULT env var — shared-mode opt-in (lowest priority)
 status: Todo
 priority: high
 tags:
-  - vault
-  - isolation
-  - env-var
-  - resolver
-  - privacy
+- vault
+- isolation
+- env-var
+- resolver
+- privacy
 created: 2026-05-01
 updated: 2026-05-01
 ---
@@ -253,3 +253,7 @@ dotnet test --nologo                              # full suite, all green
 - This task partly retro-fixes a doc/code mismatch from the post-#28 documentation push. Documenting "MEMCTL_SHARED_VAULT works as fallback" before code shipped was a false claim — task #29 makes the doc honest.
 - `.obsidian/` is the current vault marker (Obsidian-compatible by design). Don't change to `.memctl/` — would break vault interop with the Obsidian app.
 - `MEMCTL_SHARED_VAULT` being LOWEST priority (after walk-up) is the security-relevant property: per-project sensitive vaults always win over a globally-set env var. Don't reorder priorities without security review.
+
+## Comments
+
+**2026-05-01 10:59 user:** Defer until #30 epic ships (V2 layout). V2 may obsolete env var fallback — revisit after epic complete.
