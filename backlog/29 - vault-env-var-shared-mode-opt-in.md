@@ -2,7 +2,7 @@
 id: 29
 type: task
 title: Vault MEMCTL_SHARED_VAULT env var — shared-mode opt-in (lowest priority)
-status: In Progress
+status: Done
 priority: high
 tags:
 - vault
@@ -257,3 +257,5 @@ dotnet test --nologo                              # full suite, all green
 ## Comments
 
 **2026-05-01 10:59 user:** Defer until #30 epic ships (V2 layout). V2 may obsolete env var fallback — revisit after epic complete.
+
+**2026-05-02 user:** Pipeline complete. v1.3.1 ready. Build clean, 53/53 tests, smoke 2/2. Local merge (push pending PAT). Em chờ anh push tag.
