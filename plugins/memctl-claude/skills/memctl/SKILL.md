@@ -14,6 +14,48 @@ You have persistent memory. It survives across sessions, across projects, across
 
 ---
 
+## First-run setup (bot decision tree)
+
+When you start a Claude Code session in a project, run this decision tree once:
+
+```
+1. memctl status                                      # always — check vault state
+   ├── success + vault_found=true  → vault exists, proceed normally
+   ├── success + vault_found=false → no vault here yet, decide next step
+   └── command not found            → tell user: install memctl (see Prerequisites below)
+
+2. IF no vault yet, ask user (only once per project):
+   "No memctl vault here. Init `<cwd>/.memctl/` for this project? [Y/n]"
+   ├── Y → memctl init --vault .                      # creates ./.memctl/ + adds .gitignore
+   ├── shared global vault → tell user: 'export MEMCTL_SHARED_VAULT=<path>'  (v1.3.1+)
+   └── skip → continue without memory; do NOT prompt again this session
+
+3. memctl model download                              # only if status reports model_ready=false (one-time, ~310 MB)
+
+4. memctl ingest                                      # only if vault exists but vault_indexed=false
+```
+
+Hooks (SessionStart/UserPromptSubmit/Stop) fail silently when vault missing — they exit 0 and inject nothing. Bot is the one that detects and offers init.
+
+After init completes, every subsequent prompt receives `## Memory Context` injection automatically. Bot reads that block as part of normal context, no explicit recall needed.
+
+### Optional shared vault (v1.3.1+)
+
+For cross-project personal notes (life decisions, code patterns) without per-project vaults everywhere:
+
+```bash
+# Init once
+memctl init --vault $HOME/memctl-personal
+
+# Set env var so cwd without `.memctl/` falls through to it
+export MEMCTL_SHARED_VAULT=$HOME/memctl-personal/.memctl     # Linux/macOS
+$env:MEMCTL_SHARED_VAULT="$HOME\memctl-personal\.memctl"   # PowerShell
+```
+
+Per-project `.memctl/` always wins over env var. Sensitive vaults never leak.
+
+---
+
 ## Memory Protocol — What you actually do
 
 > Full protocol: `backlog/wiki/memory-protocol.md` (canonical, ~1700 lines, 22 sections — everything below is summary).
