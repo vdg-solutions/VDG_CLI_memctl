@@ -27,6 +27,7 @@ public static class MemctlResultMapper
             ModelList ml                      => MapModelList(ml),
             ModelSelection ms                 => MapModelSelection(ms),
             LintReport lr                     => MapLint(lr),
+            MaintainResult mr                 => MapMaintain(mr),
             SearchHitsResult shr              => MapSearchHits(shr),
             SearchTagsHitsResult sthr         => MapSearchTagsHits(sthr),
             SearchLinksHitsResult slhr        => MapSearchLinksHits(slhr),
@@ -126,6 +127,15 @@ public static class MemctlResultMapper
         Id     = w.Id,
         File   = w.FilePath,
         Weight = w.Weight,
+    };
+
+    public static MaintainResultDto MapMaintain(MaintainResult m) => new()
+    {
+        Actions       = m.Actions,
+        Skipped       = m.Skipped,
+        SkippedReason = m.SkippedReason,
+        Throttled     = m.Throttled,
+        DryRun        = m.DryRun,
     };
 
     public static DecayReportDto MapDecay(DecayReport d) => new()

@@ -492,6 +492,27 @@ decayCmd.SetHandler(ctx =>
 });
 root.AddCommand(decayCmd);
 
+// --- maintain ---
+var maintainForceOpt  = new Option<bool>("--force",   "Bypass 60s throttle");
+var maintainDryRunOpt = new Option<bool>("--dry-run", "Plan actions without executing");
+var maintainCmd       = new Command("maintain", "Self-decide scope (ingest/lint/decay) — pressure-driven, throttled 60s");
+maintainCmd.AddOption(maintainForceOpt);
+maintainCmd.AddOption(maintainDryRunOpt);
+maintainCmd.SetHandler(async ctx =>
+{
+    var g  = G(ctx);
+    if (RequireVault(g, ctx) is not { } vault) return;
+    var pr  = ctx.ParseResult;
+    var emb = await GetEmbedding(g);
+    var opts = new MaintainOptions(
+        Force:  pr.GetValueForOption(maintainForceOpt),
+        DryRun: pr.GetValueForOption(maintainDryRunOpt));
+    var outcome = new MaintainOperator(vaultReader, noteIndex, emb).Execute(vault, opts);
+    ResultPrinter.Print(outcome);
+    ctx.ExitCode = outcome.Success ? 0 : 1;
+});
+root.AddCommand(maintainCmd);
+
 // --- identity ---
 var identityCmd = new Command("identity", "Manage vault identity note (Layer 0 context)");
 

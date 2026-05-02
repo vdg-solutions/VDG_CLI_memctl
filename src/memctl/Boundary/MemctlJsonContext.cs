@@ -21,6 +21,7 @@ namespace Memctl.Boundary;
 [JsonSerializable(typeof(GrepListResultDto))]
 [JsonSerializable(typeof(WeightChangeDto))]
 [JsonSerializable(typeof(DecayReportDto))]
+[JsonSerializable(typeof(MaintainResultDto))]
 [JsonSerializable(typeof(VaultStatusDto))]
 [JsonSerializable(typeof(CaptureReportDto))]
 [JsonSerializable(typeof(IngestReportDto))]

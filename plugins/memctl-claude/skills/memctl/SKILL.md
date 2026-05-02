@@ -196,20 +196,31 @@ memctl list --limit 10                        # top by weight
 
 Realistic gain: ~5-10% (vault <100), ~25-35% (vault 500-2000). NOT 50-60%.
 
-### Maintenance (separate commands today, unified `maintain` facade planned)
-
-Today (v1.3.x) — invoke individually as needed:
+### Maintenance (single `maintain` command, self-decides scope)
 
 ```bash
-memctl ingest                 # re-index after notes added outside memctl
-memctl lint                   # structural lint (orphans, broken links, duplicates)
-memctl lint --semantic --self # semantic lint via bot reasoning (no external LLM)
-memctl decay --days 30        # reduce weight of stale notes
+memctl maintain               # auto-detects what's needed: ingest if vault changed + decay if stale
+memctl maintain --dry-run     # plan without executing
+memctl maintain --force       # bypass 60s throttle
 ```
 
-Each command idempotent + safe to call repeatedly. `ingest` runs structural lint baked-in. Bot calls these explicitly when context warrants — no auto-trigger yet.
+What it does (in order):
+1. Throttle check — skip if last run < 60s ago (unless `--force`)
+2. **Ingest** if any vault file modified after index — re-indexes (structural lint baked-in)
+3. **Decay** if `last_decay_date != today` — reduces weight of notes >30 days stale
+4. Stamp `last_maintain_run` timestamp in index metadata
 
-Future (planned `maintain` facade): single `memctl maintain` reads `pressure.json`, decides scope (ingest / lint / decay / dedupe / dream), throttles 60s. Until shipped, call commands above directly.
+Output:
+```json
+{"actions": ["ingest", "decay"], "skipped": ["..."], "skipped_reason": null, "throttled": false, "dry_run": null}
+```
+
+Semantic lint (LLM-driven contradiction/synthesis check) NOT auto-triggered — invoke manually when bot wants deep audit:
+
+```bash
+memctl lint --semantic --self                              # bot reasons in chat
+memctl lint --semantic --llm-url <url> --llm-model <model> # external LLM
+```
 
 ### Tag schema (routing key)
 

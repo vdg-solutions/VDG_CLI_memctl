@@ -119,6 +119,15 @@ public sealed class DecayReportDto
     [JsonPropertyName("dry_run")]           public bool? DryRun           { get; init; }
 }
 
+public sealed class MaintainResultDto
+{
+    [JsonPropertyName("actions")]        public string[] Actions       { get; init; } = [];
+    [JsonPropertyName("skipped")]        public string[] Skipped       { get; init; } = [];
+    [JsonPropertyName("skipped_reason")] public string?  SkippedReason { get; init; }
+    [JsonPropertyName("throttled")]      public bool     Throttled     { get; init; }
+    [JsonPropertyName("dry_run")]        public bool?    DryRun        { get; init; }
+}
+
 public sealed class VaultStatusDto
 {
     [JsonPropertyName("model_ready")]     public bool      ModelReady     { get; init; }
