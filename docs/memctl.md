@@ -141,7 +141,7 @@ Notes are markdown files on disk — you never lose them unless filesystem fails
 
 ## Memory Protocol — What you actually do
 
-> Full protocol: `backlog/wiki/memory-protocol.md` (canonical, ~1700 lines, 22 sections — everything below is summary).
+> Full canonical protocol (architecture, wire DTOs, hook contract, integration points) lives in the source repo and ships internally. This skill is the bot-facing summary — sufficient for using memctl in Claude Code without further docs.
 
 ### Mental model
 

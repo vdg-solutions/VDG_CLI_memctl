@@ -10,16 +10,14 @@ These are **reference docs**, NOT `/sdlc` intake. `/sdlc` only picks up `backlog
 
 | Doc | Topic |
 |-----|-------|
-| [memory-protocol.md](memory-protocol.md) | **CANONICAL** — single source of truth for ALL memory operations (4 sub-systems × 3 compute tiers + recall design + wiki maintenance + pressure-based maintenance triggers) |
-| [memory-pipeline.md](memory-pipeline.md) | How vault data flows to/from Claude Code (read/write paths via hooks) — superseded by §6 of protocol; kept for HTTP-style overview |
-| [vault-layout.md](vault-layout.md) | V2.1 directory structure + writer ownership matrix |
+| [memory-protocol.md](memory-protocol.md) | **CANONICAL** — single source of truth for ALL memory operations. Behavioral spec (4 sub-systems × 3 compute tiers, recall + encode + maintenance + identity lifecycle) PLUS technical spec (architecture, wire JSON DTOs, hook contract, integration points) |
+| [vault-layout.md](vault-layout.md) | V2.1 directory structure quick-reference + writer ownership matrix |
 
 ## Operations
 
 | Doc | Topic |
 |-----|-------|
-| [release-runbook.md](release-runbook.md) | End-to-end release SOP — version bump, tag push, workflow, PAT rotation |
-| [plugin-publish.md](plugin-publish.md) | Two-repo plugin publish flow + marketplace.json source object format |
+| [release-runbook.md](release-runbook.md) | End-to-end release SOP — version bump, tag push, workflow, PAT rotation. Includes plugin publish flow (mid-release iteration, first-time bootstrap, verify install end-to-end) |
 | [backlog-conventions.md](backlog-conventions.md) | Status semantics, when to edit Done items, archive vs fix decision tree |
 
 ## Process
@@ -43,10 +41,17 @@ These are **reference docs**, NOT `/sdlc` intake. `/sdlc` only picks up `backlog
 | `docs/designs/<id>-design.md` | Active task design (during /sdlc pipeline) |
 | `docs/retros/<id>-retro.md` | Active task retro (during /sdlc Phase 6) |
 | `docs/archives/{specs,designs,retros}/` | **Frozen** historical SDLC artifacts (post-Done) — see [archive README](../../docs/archives/README.md) |
-| `docs/memctl.md` | Skill source of truth (synced to plugin via `scripts/sync-skill-to-plugin.sh`) |
+| `docs/memctl.md` | Skill source of truth (synced to plugin via `scripts/sync-skill-to-plugin.sh`, synced to public memctl-releases SKILL.md via release workflow) |
 | `docs/refs/articles/` | External research references |
 
 `docs/specs|designs|retros/` are **frozen historical artifacts** — they document what was true at task ship time. They may contain stale paths/refs; don't bulk-update unless task is reopened. Per [backlog-conventions.md](backlog-conventions.md), Done items can be edited for wrong snippets that would mislead future bots, but per-task SDLC artifacts are append-only history.
+
+---
+
+## Consolidation history
+
+- 2026-05-02: dropped `memory-pipeline.md` (superseded by §6 of memory-protocol.md), dropped `plugin-publish.md` (merged into release-runbook.md). 5 wiki files → 5 stays clean.
+- 2026-05-02: memory-protocol.md gained §23 (architecture), §24 (wire protocol), §25 (hook contract), §26 (integration points) — full canonical spec, no longer behavioral-only.
 
 ---
 

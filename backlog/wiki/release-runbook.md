@@ -23,7 +23,7 @@ Push tag `v*` to private repo → workflow `.github/workflows/release.yml` runs 
 Both files MUST stay in sync (NFR-3 task #27):
 
 ```bash
-NEW_VER="1.2.1"
+NEW_VER="1.3.1"
 
 sed -i "s|<Version>[^<]*</Version>|<Version>$NEW_VER</Version>|" src/memctl/memctl.csproj
 sed -i "s|\"version\": \"[^\"]*\"|\"version\": \"$NEW_VER\"|" plugins/memctl-claude/.claude-plugin/plugin.json
@@ -78,8 +78,8 @@ Expected: 4 assets within 10-15 min.
 Same as production but suffix tag:
 
 ```bash
-git tag -a "v1.2.1-rc1" -m "rc1"
-git push origin "v1.2.1-rc1"
+git tag -a "v1.3.1-rc1" -m "rc1"
+git push origin "v1.3.1-rc1"
 ```
 
 GitHub Releases auto-flags as pre-release based on tag suffix. Workflow still runs full pipeline. Marketplace sync (task #28) skips pre-release tags.
@@ -193,14 +193,85 @@ gh api repos/actions/checkout/git/refs/tags/v4.2.2 --jq .object.sha
 
 ---
 
+## Plugin publish flow (merged from plugin-publish.md)
+
+### Two-repo split
+
+```
+PRIVATE source              PUBLIC release host          PUBLIC marketplace
+vdg-solutions/              vdg-solutions/               vdg-solutions/
+VDG_CLI_memctl              memctl-releases              claude-plugins
+
+plugins/memctl-claude/  →   plugins/memctl-claude/  ←   marketplace.json
+(authoritative source)      (Claude Code clones here)   (entry points memctl-releases)
+```
+
+Why:
+- Source repo private — Claude Code can't clone for plugin install
+- `memctl-releases` public — Claude Code clones plugin source from here on `claude plugin install memctl@vdg-solutions`
+- `claude-plugins` public marketplace — `marketplace.json` declares plugin metadata + points `source.url` at memctl-releases
+
+### Mid-release iteration (no tag, plugin-only changes)
+
+```bash
+PAT="<RELEASE_REPO_PAT>"
+TMP=$(mktemp -d)
+git clone "https://x-access-token:${PAT}@github.com/vdg-solutions/memctl-releases.git" "$TMP/rel"
+rm -rf "$TMP/rel/plugins/memctl-claude"
+cp -r plugins/memctl-claude "$TMP/rel/plugins/"
+cd "$TMP/rel"
+git add plugins/memctl-claude
+git diff --staged --quiet || git commit -m "chore: sync plugin source (mid-release iteration)"
+git push
+rm -rf "$TMP"
+```
+
+Users must `claude plugin update memctl@vdg-solutions` afterward — Claude Code caches the clone.
+
+### First-time bootstrap (new plugin family)
+
+1. Create `plugins/<plugin-name>/` in private repo: `.claude-plugin/plugin.json`, optional `hooks/hooks.json`, `skills/`, `commands/`
+2. Create or reuse public release host repo
+3. Create public marketplace repo with `.claude-plugin/marketplace.json` declaring plugin entry, object source format
+4. Copy plugin source private → public release host (one-time API PUT or git clone+cp+push)
+5. Add marketplace: `claude plugin marketplace add <owner>/<marketplace-repo>`
+6. Install: `claude plugin install <plugin>@<marketplace-name>`
+7. Wire workflow auto-sync (see "Sync plugin source to release repo" step)
+
+### Verify install end-to-end
+
+```bash
+claude plugin marketplace update vdg-solutions
+claude plugin install memctl@vdg-solutions     # first time
+claude plugin update memctl@vdg-solutions      # subsequent
+claude plugin list | grep memctl
+# Expect: memctl@vdg-solutions  Version: <x.y.z>  Status: ✔ enabled
+```
+
+Failure modes:
+- "unsupported source type" → marketplace.json source is string format, must be object
+- "could not clone" → source repo private OR `path` doesn't exist at `ref`
+
+### Plugin task design checklist
+
+Any backlog item building a Claude Code plugin MUST include:
+1. Public source repo confirmation (no private-only)
+2. `marketplace.json` snippet using object source format (NOT string)
+3. Workflow step or runbook reference for source sync on release
+4. Pointer to this runbook
+
+If missing → design gap → fix task before /sdlc.
+
+---
+
 ## Quick reference — common ops
 
 | Goal | Command |
 |------|---------|
-| Ship production v1.2.1 | `bump versions → commit → tag v1.2.1 → push origin main v1.2.1` |
-| Ship pre-release | `tag v1.2.1-rc1 → push` (no version bump in csproj/plugin needed) |
+| Ship production v1.3.1 | `bump versions → commit → tag v1.3.1 → push origin main v1.3.1` |
+| Ship pre-release | `tag v1.3.1-rc1 → push` (no version bump in csproj/plugin needed) |
 | Watch run | `gh run watch --repo vdg-solutions/VDG_CLI_memctl` |
-| Inspect release | `gh release view v1.2.1 --repo vdg-solutions/memctl-releases` |
+| Inspect release | `gh release view v1.3.1 --repo vdg-solutions/memctl-releases` |
 | Cancel stuck run | `gh run cancel <id> --repo vdg-solutions/VDG_CLI_memctl` |
 | Re-run failed | retag (delete + recreate) — `workflow_dispatch` works too if manifest unchanged |
 | List secrets | `gh secret list --repo vdg-solutions/VDG_CLI_memctl` |

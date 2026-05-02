@@ -1760,6 +1760,230 @@ Each phase is independent — ship incrementally.
 
 ---
 
+## §23 Architecture (A.D.D V3 layered)
+
+memctl built on 5-layer A.D.D V3 architecture. Strict dependency direction (each layer depends only on layers below it). Operators never call Implementations directly — always via CoreAbstractions ports.
+
+```
+┌──────────────────────────────────────────┐
+│ Bootstrap (DI container, entry point)    │  depends: all layers
+│ - Program.cs, ServiceRegistration.cs     │
+└──────────────────────────────────────────┘
+            │
+┌───────────▼──────────────────────────────┐
+│ Operators (orchestration, workflows)     │  depends: CoreAbstractions, Boundary
+│ - AddOperator, SearchOperator,           │
+│   IngestOperator, MaintainOperator, ...  │
+│ - Mapping/MemctlResultMapper             │
+└──────────────────────────────────────────┘
+            │
+┌───────────▼──────────────────────────────┐
+│ Boundary (DTOs, enums, user contracts)   │  depends: nothing
+│ - MemctlResult<T>, NoteListResultDto,    │
+│   SearchHitsResult, GrepListResultDto    │
+│ - JsonPropertyName attributes are        │
+│   FROZEN PUBLIC CONTRACT                 │
+└──────────────────────────────────────────┘
+            │
+┌───────────▼──────────────────────────────┐
+│ CoreAbstractions (entities + ports)      │  depends: nothing
+│ - Entities: Note, GrepHit, TagCount, ... │
+│ - Ports: IVaultReader, IIndex, IEmbedder │
+└──────────────────────────────────────────┘
+            ▲
+┌───────────┴──────────────────────────────┐
+│ Implementations (adapters)               │  depends: CoreAbstractions only
+│ - ObsidianVaultReader (file I/O)         │
+│ - SqliteIndex (storage)                  │
+│ - OnnxEmbedder (model)                   │
+│ - VaultLocator (resolver)                │
+└──────────────────────────────────────────┘
+```
+
+### Key rules
+- Boundary DTOs' `[JsonPropertyName]` is the public wire contract — breaking change only on major version bump
+- Operators return `MemctlResult<T>` with typed `Data` — never anonymous objects
+- Implementations never reach back into Operators or Boundary — pure adapter
+- Bootstrap is the only place wiring concrete implementations to ports
+
+### Components
+
+| Component | Layer | Responsibility |
+|-----------|-------|----------------|
+| **VaultLocator** | Implementations/Config | Walk-up resolver finding `.memctl/.obsidian/`, env var fallback |
+| **ObsidianVaultReader** | Implementations/Vault | Markdown enumeration, frontmatter parse, init structure |
+| **SqliteIndex** | Implementations/Storage | BM25 + embeddings + metadata + wikilinks graph |
+| **OnnxEmbedder** | Implementations/Embedding | EmbeddingGemma 300M ONNX inference |
+| **MemctlResultMapper** | Operators/Mapping | Outcome.Data → typed DTO dispatch |
+| **MaintainOperator** | Operators | Pressure check + scope decision + execute (lint/decay/dedupe/dream) |
+| **SearchOperator** | Operators | Hybrid BM25+semantic + smart retrieval (5 signals) |
+
+---
+
+## §24 Wire protocol (JSON contract)
+
+All commands emit JSON to stdout. Root envelope identical across actions. Per-command `data` shape varies.
+
+### Envelope (frozen contract)
+
+```json
+{
+  "schema_version": 1,
+  "success": true,
+  "action": "search|add|status|ingest|...",
+  "message": "human readable summary",
+  "data": { /* per-action shape, see below */ },
+  "error": null
+}
+```
+
+On error: `success: false`, `data: null`, `error: { code, message }`.
+
+### Per-action `data` shapes (selected — full set in `Boundary/MemctlResult.cs`)
+
+#### `status`
+```json
+{
+  "model_ready": true, "model_path": "<abs>", "model_size_mb": 295,
+  "vault_exists": true, "vault_indexed": true, "note_count": 47,
+  "index_path": "<abs>", "vault_found": true,
+  "search_path": "<cwd>", "search_strategy": "walk-up v2 (.memctl/)|MEMCTL_SHARED_VAULT env (shared)|explicit",
+  "checked_paths": ["<dir1>", "..."], "hint": null
+}
+```
+
+#### `search` (and variants `search-tags`, `search-links`)
+```json
+{
+  "query": "...",
+  "hits": [
+    {"id": "<note-id>", "title": "...", "path": "...", "score": 0.87, "snippet": "...", "tags": [...]}
+  ],
+  "total": 12
+}
+```
+
+#### `add`
+```json
+{"id": "<new-id>", "path": "<rel-path>", "title": "...", "tags": [...], "links": [...]}
+```
+
+#### `list`
+```json
+{"notes": [{"id", "title", "path", "weight", "modified"}], "total": 47}
+```
+
+#### `tags`
+```json
+{"tags": [{"name": "session", "count": 3}, ...], "total": 18}
+```
+
+#### `grep`
+```json
+{"pattern": "...", "hits": [{"path", "line", "match"}], "total": 7}
+```
+
+### Schema versioning policy
+
+- `schema_version` integer, currently `1`
+- Add new fields → minor version OK without bump (clients ignore unknown)
+- Rename / remove field → bump `schema_version` (breaking)
+- Tag mutation kept additive — never repurpose existing tag
+
+---
+
+## §25 Hook contract (any bot framework)
+
+Generic spec for integrating memctl with bot frameworks beyond Claude Code (Cursor, Continue, Aider, custom).
+
+### Hook events
+
+| Event | When fired | Command | Stdin (optional) | Stdout used | Exit code |
+|-------|-----------|---------|------------------|-------------|-----------|
+| **session-start** | Bot session begins | `memctl status --json` | none | none (status check only) | 0 always (graceful) |
+| **before-prompt** | Before bot processes user input | `memctl context-inject` | `{"session_id": "...", "cwd": "...", "prompt_text": "..."}` | markdown block injected as `## Memory Context` | 0 = inject; non-zero = skip silent |
+| **after-response** | After bot emits response | `memctl capture` | `{"session_id": "...", "turn_id": "...", "user": "...", "assistant": "..."}` | none | 0 always (graceful) |
+
+### Integration recipe
+
+1. Wrap memctl invocations in your framework's hook system
+2. Pass session context as JSON on stdin
+3. Capture stdout from `context-inject` and prepend to bot's user prompt as `## Memory Context\n<output>\n---`
+4. Treat all hooks as `|| true` — failure must NOT break the session
+
+### Disable mechanism (env vars)
+
+```bash
+MEMCTL_DISABLE_AUTOCAPTURE=1     # before-prompt hook returns empty
+MEMCTL_DISABLE_AUTOINJECT=1      # after-response hook no-op
+```
+
+Frameworks should check these env vars and skip invocation entirely (not just empty result).
+
+### Reference implementation
+
+Claude Code plugin at `plugins/memctl-claude/hooks/hooks.json` — port structure to your framework.
+
+---
+
+## §26 Integration / extension points
+
+### Custom embedder (OpenAI-compatible)
+
+Default = local EmbeddingGemma 300M ONNX (~295 MB). Swap via global flags:
+
+```bash
+memctl ingest \
+  --llm-url https://your-api/v1 \
+  --llm-model your-embedding-model \
+  --llm-key $YOUR_KEY
+```
+
+Affects `ingest` and `add` commands. Vault re-index required if dimensions differ from previous embedder (delete `index.db`, re-ingest).
+
+### Custom hook commands
+
+Replace `memctl` invocation with shim that calls memctl + does extra work (e.g., redact PII before capture, encrypt notes). Shim must:
+- Accept same stdin JSON
+- Pass to memctl unchanged for the core operation
+- Emit same stdout shape (markdown for inject)
+
+### Vault data direct access
+
+Vault is plain markdown + SQLite. Read directly without memctl when needed:
+- `.md` files in vault root + `tasks/lessons/decisions/patterns/chats/` — Obsidian-compatible
+- `.memctl/.obsidian/memctl/index.db` — SQLite, schema in repo `src/memctl/Implementations/Storage/`
+- Frontmatter required fields: `id`, `created`, optional: `tags`, `weight`, `confidence`, `superseded_by`
+
+### Plugin authoring (Claude Code marketplace)
+
+Ship a plugin via marketplace.json source object format. Reference: `plugins/memctl-claude/.claude-plugin/plugin.json`. Marketplace at `vdg-solutions/claude-plugins`.
+
+### Custom maintenance policy
+
+`memctl maintain` reads `pressure.json` thresholds. Override per-vault via `<vault>/.memctl/.obsidian/memctl/maintain-policy.json`:
+
+```json
+{
+  "ingest_threshold_modified_files": 5,
+  "lint_threshold_days": 7,
+  "decay_threshold_days": 90,
+  "dream_threshold_pending_promotions": 10
+}
+```
+
+### Compatibility policy
+
+| Change type | Version impact |
+|-------------|----------------|
+| Add command / flag | minor (1.x.0) |
+| Add field to DTO | minor (1.x.0) |
+| Rename / remove DTO field | major (2.0.0) — bump `schema_version` |
+| Change hook stdin/stdout shape | major (2.0.0) |
+| Internal refactor | patch (1.x.y) |
+
+---
+
 ## §22 Glossary
 
 - **Vault** — `.memctl/` directory containing all memory for a project
