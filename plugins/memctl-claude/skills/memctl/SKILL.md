@@ -21,8 +21,8 @@ The Claude Code plugin ships hooks + skill, but **NOT** the binary. Bot must ver
 ```
 Bot first action this session: check binary
   ├── `memctl --version`
-  │     ├── prints version (e.g. "1.3.1") → proceed to First-run setup
-  │     ├── version mismatch with plugin (plugin v1.3.1 vs binary v1.2.x) → tell user: upgrade binary
+  │     ├── prints version (e.g. "1.4.0") → proceed to First-run setup
+  │     ├── version mismatch with plugin (plugin v1.4.0 vs binary v1.3.x) → tell user: upgrade binary
   │     └── command-not-found → binary missing, tell user to install:
   │           Linux/macOS:
   │             curl -fsSL https://raw.githubusercontent.com/vdg-solutions/memctl-releases/master/install.sh | sh
@@ -833,7 +833,7 @@ memctl search-semantic "<query>" --vault ./vault --scope <tag-result-ids>
 
 ---
 
-## Capabilities (current state, v1.3.x)
+## Capabilities (current state, v1.4.x)
 
 memctl ships these capabilities today. Bot doesn't need to plan around future features — call commands directly.
 
