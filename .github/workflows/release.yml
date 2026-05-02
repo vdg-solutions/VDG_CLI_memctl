@@ -160,7 +160,7 @@ jobs:
             --notes-file release-notes.md \
             release/*
 
-      - name: Sync plugin source to release repo
+      - name: Sync plugin source + top-level SKILL.md to release repo
         env:
           GH_TOKEN: ${{ secrets.RELEASE_REPO_PAT }}
         shell: bash
@@ -169,20 +169,26 @@ jobs:
           REL=/tmp/release-repo
           rm -rf "$REL"
           git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${RELEASE_REPO}.git" "$REL"
+
+          # Sync plugin source (overwrite directory)
           rm -rf "$REL/plugins/memctl-claude"
           mkdir -p "$REL/plugins"
           cp -r plugins/memctl-claude "$REL/plugins/"
+
+          # Sync top-level SKILL.md from docs/memctl.md (skill source of truth)
+          cp docs/memctl.md "$REL/SKILL.md"
+
           cd "$REL"
           git config user.email "actions@github.com"
           git config user.name "release-pipeline"
-          git add plugins/memctl-claude
+          git add plugins/memctl-claude SKILL.md
           if git diff --staged --quiet; then
-            echo "::notice::plugin source unchanged, skip sync"
+            echo "::notice::plugin + skill unchanged, skip sync"
             exit 0
           fi
-          git commit -m "chore: sync plugin source to ${GITHUB_REF_NAME}"
+          git commit -m "chore: sync plugin + skill to ${GITHUB_REF_NAME}"
           git push
-          echo "::notice::plugin source synced to ${GITHUB_REF_NAME}"
+          echo "::notice::plugin + skill synced to ${GITHUB_REF_NAME}"
 
   sync-marketplace:
     needs: release
