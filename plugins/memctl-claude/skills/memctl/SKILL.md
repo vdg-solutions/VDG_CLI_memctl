@@ -14,15 +14,38 @@ You have persistent memory. It survives across sessions, across projects, across
 
 ---
 
-## First-run setup (bot decision tree)
+## Prerequisites — install memctl binary FIRST
 
-When you start a Claude Code session in a project, run this decision tree once:
+The Claude Code plugin ships hooks + skill, but **NOT** the binary. Bot must verify binary present before any memctl command.
 
 ```
-1. memctl status                                      # always — check vault state
+Bot first action this session: check binary
+  ├── `memctl --version`
+  │     ├── prints version (e.g. "1.3.1") → proceed to First-run setup
+  │     ├── version mismatch with plugin (plugin v1.3.1 vs binary v1.2.x) → tell user: upgrade binary
+  │     └── command-not-found → binary missing, tell user to install:
+  │           Linux/macOS:
+  │             curl -fsSL https://raw.githubusercontent.com/vdg-solutions/memctl-releases/master/install.sh | sh
+  │           Windows PowerShell:
+  │             iwr -useb https://raw.githubusercontent.com/vdg-solutions/memctl-releases/master/install.ps1 | iex
+  │           Or via dotnet:
+  │             dotnet tool install -g memctl
+  │           After install: restart shell so PATH update takes effect.
+```
+
+Until binary present, all hook commands fail silently (they have `|| true` guards). Bot sees no `## Memory Context` injection, sees nothing wrong, but memory is offline. ALWAYS check `memctl --version` once per session before assuming memory works.
+
+---
+
+## First-run setup (bot decision tree)
+
+After binary verified, run this decision tree once per session:
+
+```
+1. memctl status                                      # check vault state
    ├── success + vault_found=true  → vault exists, proceed normally
    ├── success + vault_found=false → no vault here yet, decide next step
-   └── command not found            → tell user: install memctl (see Prerequisites below)
+   └── command not found            → re-check Prerequisites above
 
 2. IF no vault yet, ask user (only once per project):
    "No memctl vault here. Init `<cwd>/.memctl/` for this project? [Y/n]"
@@ -53,6 +76,66 @@ $env:MEMCTL_SHARED_VAULT="$HOME\memctl-personal\.memctl"   # PowerShell
 ```
 
 Per-project `.memctl/` always wins over env var. Sensitive vaults never leak.
+
+---
+
+## Disable / uninstall
+
+Disable individual hook (graceful degrade — hook exits 0 silent):
+
+```bash
+export MEMCTL_DISABLE_AUTOCAPTURE=1     # Stop hook off (no chat capture)
+export MEMCTL_DISABLE_AUTOINJECT=1      # UserPromptSubmit hook off (no context inject)
+# SessionStart has no flag — it's idempotent status check
+```
+
+One-off no-trace session: set both env vars before launching `claude`.
+
+Uninstall plugin entirely:
+
+```bash
+claude plugin uninstall memctl@vdg-solutions
+```
+
+Uninstall binary:
+
+```bash
+# If installed via curl/iwr
+rm ~/.local/bin/memctl                                    # Linux/macOS
+Remove-Item "$env:LOCALAPPDATA\Programs\memctl" -Recurse  # Windows
+
+# If installed via dotnet tool
+dotnet tool uninstall -g memctl
+```
+
+Vault data persists at `<project>/.memctl/` after uninstall — delete manually if not wanted.
+
+---
+
+## Recovery — broken vault / model / version mismatch
+
+```bash
+# Model corrupted (download interrupted, file truncated):
+memctl model download --force                            # re-fetch (~310 MB)
+
+# Vault index corrupted (SQLite corruption, ABI break post-upgrade):
+rm <vault>/.obsidian/memctl/index.db                     # delete index, NOT notes
+memctl ingest --vault <vault>                            # rebuild
+
+# Notes partially deleted but vault dir survives:
+memctl ingest --vault <vault>                            # re-scan + re-index existing .md files
+
+# Plugin v1.3.x + binary v1.2.x mismatch (skill expects new commands binary lacks):
+# Upgrade binary to match plugin version (re-run installer one-liner)
+
+# Vault gone entirely (catastrophic):
+# Restore from git/backup if vault tracked, else memctl init fresh + accept memory loss
+
+# Verify recovery:
+memctl status     # all green: model_ready=true, vault_indexed=true, note_count > 0
+```
+
+Notes are markdown files on disk — you never lose them unless filesystem fails. Index is rebuildable from notes.
 
 ---
 
