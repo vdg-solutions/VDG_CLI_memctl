@@ -6,8 +6,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "memctl status --json 2>/dev/null || true",
-            "timeout": 3000
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/version-check.js\"",
+            "timeout": 5000
           }
         ]
       }
