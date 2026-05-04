@@ -53,6 +53,18 @@ public sealed class SqliteNoteIndex : INoteIndex
     public void Delete(string noteId) =>
         Exec("DELETE FROM notes WHERE id = @id", ("@id", noteId));
 
+    public IReadOnlyList<(string Id, string FilePath)> GetAllFilePaths()
+    {
+        if (_db is null) return [];
+        using var cmd = _db.CreateCommand();
+        cmd.CommandText = "SELECT id, file_path FROM notes";
+        var results = new List<(string, string)>();
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+            results.Add((reader.GetString(0), reader.GetString(1)));
+        return results;
+    }
+
     public Note? GetById(string noteId) =>
         QueryOne("SELECT * FROM notes WHERE id = @id", ("@id", noteId));
 
@@ -272,7 +284,11 @@ public sealed class SqliteNoteIndex : INoteIndex
     public void IncrementAccess(string noteId) =>
         Exec("UPDATE notes SET access_count = access_count + 1 WHERE id = @id", ("@id", noteId));
 
-    public void Dispose() => _db?.Dispose();
+    public void Dispose()
+    {
+        _db?.Dispose();
+        _db = null;
+    }
 
     public void SetMetadata(string key, string value) =>
         Exec("INSERT INTO metadata (key, value) VALUES (@k, @v) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
