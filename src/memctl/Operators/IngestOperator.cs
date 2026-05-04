@@ -16,6 +16,22 @@ public sealed class IngestOperator(IVaultReader vault, INoteIndex index, GemmaEm
         var dbPath = DbPath(vaultPath);
         index.Initialize(dbPath);
 
+        // Prune stale entries: delete index rows whose backing .md files are gone
+        var indexedPaths = index.GetAllFilePaths();
+        var diskPaths = vault.EnumerateMarkdownFiles(vaultPath)
+            .Select(f => Path.GetRelativePath(vaultPath, f).Replace('\\', '/'))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        int pruned = 0;
+        foreach (var (id, filePath) in indexedPaths)
+        {
+            if (!diskPaths.Contains(filePath))
+            {
+                index.Delete(id);
+                pruned++;
+            }
+        }
+
         var files = vault.EnumerateMarkdownFiles(vaultPath).ToList();
         var added = 0;
 
@@ -65,8 +81,8 @@ public sealed class IngestOperator(IVaultReader vault, INoteIndex index, GemmaEm
             semanticHint = "Semantic lint: never run. Run: memctl lint --semantic";
         }
 
-        return MemctlOutcome.Ok("ingest", $"Indexed {added}/{files.Count} notes",
-            new IngestReport(added, files.Count, vaultPath, model, semanticHint));
+        return MemctlOutcome.Ok("ingest", $"Indexed {added}/{files.Count} notes, pruned {pruned}",
+            new IngestReport(added, files.Count, vaultPath, model, semanticHint, pruned));
     }
 
     public static bool NeedsIngest(string vaultPath)

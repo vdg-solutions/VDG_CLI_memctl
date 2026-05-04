@@ -163,6 +163,7 @@ public static class MemctlResultMapper
         Vault            = i.Vault,
         Model            = i.Model,
         SemanticLintHint = i.SemanticLintHint,
+        Pruned           = i.Pruned,
     };
 
     public static OrganizeReportDto MapOrganize(OrganizeReport o) => new()

@@ -5,4 +5,5 @@ public sealed record IngestReport(
     int     Total,
     string  Vault,
     string  Model,
-    string? SemanticLintHint);
+    string? SemanticLintHint,
+    int     Pruned = 0);

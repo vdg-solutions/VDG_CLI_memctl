@@ -159,6 +159,7 @@ public sealed class IngestReportDto
     [JsonPropertyName("vault")]              public string  Vault            { get; init; } = "";
     [JsonPropertyName("model")]              public string  Model            { get; init; } = "";
     [JsonPropertyName("semantic_lint_hint")] public string? SemanticLintHint { get; init; }
+    [JsonPropertyName("pruned")]             public int     Pruned            { get; init; }
 }
 
 public sealed class OrganizeReportDto

@@ -21,6 +21,7 @@ public interface INoteIndex : IDisposable
     void    ApplyDecay(string noteId, float newWeight, bool archived);
     void    ApplyDecayBatch(IEnumerable<(string NoteId, float NewWeight, bool Archived)> updates);
     void    IncrementAccess(string noteId);
+    IReadOnlyList<(string Id, string FilePath)> GetAllFilePaths();
     void    SetMetadata(string key, string value);
     string? GetMetadata(string key);
 }
