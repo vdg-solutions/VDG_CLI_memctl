@@ -193,6 +193,21 @@ getCmd.SetHandler(ctx =>
 });
 root.AddCommand(getCmd);
 
+// --- delete ---
+var deleteIdArg = new Argument<string>("id", "Note ID (16-char hex)");
+var deleteCmd   = new Command("delete", "Delete a note from vault and index by ID");
+deleteCmd.AddArgument(deleteIdArg);
+deleteCmd.SetHandler(ctx =>
+{
+    var g = G(ctx);
+    if (RequireVault(g, ctx) is not { } vault) return;
+    var op      = new DeleteOperator(vaultReader, noteIndex);
+    var outcome = op.Execute(vault, ctx.ParseResult.GetValueForArgument(deleteIdArg));
+    ResultPrinter.Print(outcome);
+    ctx.ExitCode = outcome.Success ? 0 : 2;
+});
+root.AddCommand(deleteCmd);
+
 // --- list ---
 var listTagOpt            = new Option<string?>("--tag",              "Filter by tag");
 var listIncludeArchiveOpt = new Option<bool>   ("--include-archived", "Include archived notes");
