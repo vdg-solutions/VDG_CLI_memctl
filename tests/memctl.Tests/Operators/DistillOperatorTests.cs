@@ -120,6 +120,9 @@ public class DistillOperatorTests : IDisposable
             onDistill();
             return Task.FromResult(new DistillResult([]));
         }
+
+        public Task<ContradictionResult> CheckContradictionAsync(DistilledNote d, IReadOnlyList<Note> n, CancellationToken ct = default)
+            => Task.FromResult(new ContradictionResult(false, null, ContradictionResolution.KeepNew, null, ""));
     }
 
     private sealed class FixedResultLlmClient(DistillResult result) : ILlmClient
@@ -129,5 +132,8 @@ public class DistillOperatorTests : IDisposable
 
         public Task<DistillResult> DistillAsync(string c, IReadOnlyList<Note> n, CancellationToken ct = default)
             => Task.FromResult(result);
+
+        public Task<ContradictionResult> CheckContradictionAsync(DistilledNote d, IReadOnlyList<Note> n, CancellationToken ct = default)
+            => Task.FromResult(new ContradictionResult(false, null, ContradictionResolution.KeepNew, null, ""));
     }
 }

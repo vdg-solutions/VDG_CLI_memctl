@@ -11,6 +11,7 @@ public sealed class NoteEnrichment
 
 public interface ILlmClient
 {
-    Task<NoteEnrichment> EnrichAsync(string content,              IReadOnlyList<Note> existingNotes, CancellationToken ct = default);
-    Task<DistillResult>  DistillAsync(string conversationContent, IReadOnlyList<Note> existingNotes, CancellationToken ct = default);
+    Task<NoteEnrichment>      EnrichAsync(string content,              IReadOnlyList<Note> existingNotes, CancellationToken ct = default);
+    Task<DistillResult>       DistillAsync(string conversationContent, IReadOnlyList<Note> existingNotes, CancellationToken ct = default);
+    Task<ContradictionResult> CheckContradictionAsync(DistilledNote newNote, IReadOnlyList<Note> candidates, CancellationToken ct = default);
 }

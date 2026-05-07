@@ -394,13 +394,15 @@ orgCmd.SetHandler(async ctx =>
 root.AddCommand(orgCmd);
 
 // --- distill ---
-var distillConvOpt   = new Option<string?>("--conversation", "Distill a specific conversation by ID or path");
-var distillDryRunOpt = new Option<bool>   ("--dry-run",      "Preview extractions without writing");
-var distillSinceOpt  = new Option<string?>("--since",        "Only distill conversations after this date (YYYY-MM-DD)");
-var distillCmd       = new Command("distill", "Extract long-term memory from conversations (Layer 1 → Layer 2)");
+var distillConvOpt      = new Option<string?>("--conversation",           "Distill a specific conversation by ID or path");
+var distillDryRunOpt    = new Option<bool>   ("--dry-run",                 "Preview extractions without writing");
+var distillSinceOpt     = new Option<string?>("--since",                   "Only distill conversations after this date (YYYY-MM-DD)");
+var distillResolveOpt   = new Option<bool>   ("--resolve-contradictions",  "Check and resolve contradictions with existing L2 notes (opt-in)");
+var distillCmd          = new Command("distill", "Extract long-term memory from conversations (Layer 1 → Layer 2)");
 distillCmd.AddOption(distillConvOpt);
 distillCmd.AddOption(distillDryRunOpt);
 distillCmd.AddOption(distillSinceOpt);
+distillCmd.AddOption(distillResolveOpt);
 distillCmd.SetHandler(async ctx =>
 {
     var g = G(ctx);
@@ -411,13 +413,14 @@ distillCmd.SetHandler(async ctx =>
         ctx.ExitCode = 1;
         return;
     }
-    var llm     = LlmClient(g)!;
-    var convId  = ctx.ParseResult.GetValueForOption(distillConvOpt);
-    var dryRun  = ctx.ParseResult.GetValueForOption(distillDryRunOpt);
-    var sinceStr = ctx.ParseResult.GetValueForOption(distillSinceOpt);
+    var llm                  = LlmClient(g)!;
+    var convId               = ctx.ParseResult.GetValueForOption(distillConvOpt);
+    var dryRun               = ctx.ParseResult.GetValueForOption(distillDryRunOpt);
+    var sinceStr             = ctx.ParseResult.GetValueForOption(distillSinceOpt);
+    var resolveContradictions = ctx.ParseResult.GetValueForOption(distillResolveOpt);
     DateTime? since = sinceStr is not null ? DateTime.Parse(sinceStr).ToUniversalTime() : null;
     var op      = new DistillOperator(vaultReader, noteIndex, llm);
-    var outcome = await op.ExecuteAsync(vault, convId, since, dryRun, ctx.GetCancellationToken());
+    var outcome = await op.ExecuteAsync(vault, convId, since, dryRun, resolveContradictions, ctx.GetCancellationToken());
     ResultPrinter.Print(outcome);
     ctx.ExitCode = outcome.Success ? 0 : 1;
 });

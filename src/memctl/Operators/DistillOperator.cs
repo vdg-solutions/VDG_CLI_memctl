@@ -13,6 +13,7 @@ public sealed class DistillOperator(IVaultReader vaultReader, INoteIndex index, 
         string?   conversationId,
         DateTime? since,
         bool      dryRun,
+        bool      resolveContradictions = false,
         CancellationToken ct = default)
     {
         index.Initialize(IngestOperator.DbPath(vaultPath));
@@ -47,8 +48,11 @@ public sealed class DistillOperator(IVaultReader vaultReader, INoteIndex index, 
             }
 
             var writtenPaths = new List<string>();
-            foreach (var ex in result.Extractions)
+            foreach (var exRaw in result.Extractions)
             {
+                var ex = await ApplyContradictionCheckAsync(vaultPath, exRaw, resolveContradictions, ct);
+                if (ex is null) continue; // KeepExisting
+
                 var folder      = MapFolder(ex.Type);
                 var safeTitle   = SanitizeFileName(ex.Title);
                 var relPath     = $"{folder}/{safeTitle}.md";
@@ -135,4 +139,64 @@ public sealed class DistillOperator(IVaultReader vaultReader, INoteIndex index, 
         => string.Concat(title.Select(c => char.IsLetterOrDigit(c) || c == '-' || c == '_' ? c : '-'))
                  .Trim('-')
                  .ToLowerInvariant();
+
+    // Returns null to signal "skip this note" (KeepExisting), or the (possibly mutated) note to write.
+    private async Task<DistilledNote?> ApplyContradictionCheckAsync(
+        string vaultPath, DistilledNote ex, bool resolveContradictions, CancellationToken ct)
+    {
+        if (!resolveContradictions) return ex;
+
+        var folderPrefix = MapFolder(ex.Type) + "/";
+        var candidates   = index.SearchBm25(ex.Title, 5, folderPrefix: folderPrefix)
+                               .Select(h => h.Note)
+                               .ToList();
+        if (candidates.Count == 0) return ex;
+
+        ContradictionResult cr;
+        try
+        {
+            cr = await llmClient.CheckContradictionAsync(ex, candidates, ct);
+        }
+        catch (Exception e)
+        {
+            EventLog.Record(vaultPath, "operator_run", "error", "distill", $"CheckContradiction failed: {e.Message}");
+            return ex;
+        }
+
+        if (!cr.Contradicts) return ex;
+
+        var existingNote = cr.ExistingId is not null
+            ? candidates.FirstOrDefault(c => c.Id == cr.ExistingId)
+            : null;
+
+        if (existingNote is null) return ex; // invalid ExistingId — treat as no contradiction
+
+        Console.Error.WriteLine($"[distill] contradiction resolved: {cr.Resolution} — {cr.Rationale}");
+
+        if (cr.Resolution == ContradictionResolution.KeepExisting)
+            return null;
+
+        ArchiveNote(vaultPath, existingNote);
+
+        if (cr.Resolution == ContradictionResolution.Merge && cr.MergedContent is not null)
+            return ex with { Content = cr.MergedContent };
+
+        return ex;
+    }
+
+    private void ArchiveNote(string vaultPath, Note note)
+    {
+        var absPath = Path.Combine(vaultPath, note.FilePath);
+        if (!File.Exists(absPath)) return;
+        var archived = note with
+        {
+            Archived = true,
+            Weight   = 0f,
+            Tags     = [.. note.Tags.Append("superseded").Distinct()],
+            Modified = DateTime.UtcNow,
+        };
+        vaultReader.WriteNote(archived, vaultPath, note.FilePath);
+        // ApplyDecay updates weight + archived atomically — Upsert preserves these fields on conflict
+        index.ApplyDecay(note.Id, 0f, archived: true);
+    }
 }
