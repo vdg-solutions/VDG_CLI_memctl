@@ -53,17 +53,88 @@ Target: `curl -fsSL https://raw.githubusercontent.com/vdg-solutions/memctl-relea
 - Chocolatey / Homebrew / winget packaging (separate task)
 - Windows: `irm ... | iex` style (dùng explicit download thay vì pipe vì PowerShell pipe model khác)
 
+## Prerequisite: fix release.yml Package step (BLOCKER)
+
+**Current state**: `Package` job trong `release.yml` chỉ copy binary (`memctl`/`memctl.exe`) vào archive. Native libs **không có** trong `.zip`/`.tar.gz`. Nếu install script download archive về mà không có native libs thì binary không chạy được.
+
+**Fix needed** — thêm vào Package step sau `cp "publish/memctl${EXT}" package/`:
+```bash
+# Copy native libs produced by AOT publish
+find publish -name "*.so" -o -name "*.dylib" -o -name "*.dll" | grep -v memctl | xargs -I{} cp {} package/ 2>/dev/null || true
+```
+
+Windows build thì copy cụ thể:
+```bash
+for lib in onnxruntime.dll e_sqlite3.dll onnxruntime_providers_shared.dll; do
+  [ -f "publish/$lib" ] && cp "publish/$lib" package/ || true
+done
+```
+
+Verify: archive phải chứa ít nhất 1 `.so`/`.dylib`/`.dll` ngoài binary chính.
+
+**Lưu ý**: `deploy.ps1` (local dev) build + install riêng biệt, không liên quan đến install.sh. Rewriting install.sh không ảnh hưởng dev workflow.
+
 ## Implementation notes
 
-GitHub API để lấy latest release:
+### GitHub API — lấy latest release tag
+
 ```bash
 LATEST=$(curl -fsSL https://api.github.com/repos/vdg-solutions/memctl-releases/releases/latest \
   | grep '"tag_name"' | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
+[ -z "$LATEST" ] && { echo "ERROR: could not fetch latest release" >&2; exit 1; }
 ```
 
-Asset URL pattern: `https://github.com/vdg-solutions/memctl-releases/releases/download/$LATEST/memctl-$RID-$LATEST.tar.gz`
+Failure modes cần handle:
+- `curl` fails (no network) → exit với message rõ ràng
+- API returns 404 (no releases yet) → exit với message rõ ràng
+- `tag_name` empty sau parse (API rate-limited, returns `{"message":"API rate limit exceeded"}`) → exit với message rõ ràng
 
-`release.yml` cần thêm step copy `install.sh` + `Install.ps1` vào release repo (hiện sync `plugins/` rồi, thêm scripts vào list).
+### Asset URL pattern
+
+```
+.tar.gz: https://github.com/vdg-solutions/memctl-releases/releases/download/$LATEST/memctl-$RID-${LATEST#v}.tar.gz
+.zip:    https://github.com/vdg-solutions/memctl-releases/releases/download/$LATEST/memctl-win-x64-${LATEST#v}.zip
+```
+
+Note: `LATEST` là `v1.4.2`, còn filename dùng `1.4.2` (không có `v`). Strip bằng `${LATEST#v}`.
+
+### Verify download không corrupt
+
+```bash
+[ -s "$TMPFILE" ] || { echo "ERROR: download empty or failed" >&2; exit 1; }
+tar -tzf "$TMPFILE" >/dev/null 2>&1 || { echo "ERROR: archive corrupt" >&2; exit 1; }
+```
+
+### release.yml — sync install scripts (exact code)
+
+Trong job `release`, step `Sync plugin source + top-level SKILL.md to release repo`, thêm sau `cp docs/memctl.md "$REL/SKILL.md"`:
+
+```bash
+# Sync online install scripts
+cp install.sh "$REL/install.sh"
+cp Install.ps1 "$REL/Install.ps1"
+```
+
+**IMPORTANT**: rename `install.ps1` → `Install.ps1` ở source repo trước khi thêm sync step này. Nếu file chưa rename mà release chạy thì `cp Install.ps1` sẽ fail. Làm trong cùng một commit.
+
+Và update `git add` line:
+```bash
+git add plugins/memctl-claude SKILL.md install.sh Install.ps1
+```
+
+### Windows one-liner
+
+Vì `irm | iex` out of scope, Windows user dùng PowerShell download explicit:
+
+```powershell
+# Option 1: download + run
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/vdg-solutions/memctl-releases/main/Install.ps1" -OutFile "$env:TEMP\memctl-install.ps1"; & "$env:TEMP\memctl-install.ps1"
+
+# Option 2: gh release download (nếu đã có gh CLI)
+gh release download --repo vdg-solutions/memctl-releases --pattern "memctl-win-x64-*.zip" -D $env:TEMP
+```
+
+README nên document cả hai. Option 1 là primary.
 
 ## Acceptance criteria
 
@@ -75,16 +146,19 @@ Asset URL pattern: `https://github.com/vdg-solutions/memctl-releases/releases/do
 | AC-4 | Binary verify sau install: `memctl --version` exit 0 | chạy xong → version in ra |
 | AC-5 | `Install.ps1` Windows: rename-aside + rollback nếu verify fail | corrupt binary test |
 | AC-6 | `--dir` / `-Dir` override install directory trên cả hai scripts | `bash install.sh --dir /tmp/test` → binary ở `/tmp/test/memctl` |
-| AC-7 | `release.yml` sync scripts vào release repo khi tag push | push tag → scripts có trong release repo |
-| AC-8 | README trong release repo có one-liner install command | đọc README sau release |
+| AC-7 | `release.yml` sync install.sh + Install.ps1 vào release repo khi tag push | push tag → scripts có trong release repo |
+| AC-8 | README trong release repo có one-liner cho Linux/macOS + Windows | đọc README sau release |
+| AC-9 | `install.sh` exit 1 với message rõ nếu không có network hoặc GitHub API rate-limited | mock curl fail → error message in ra stderr |
+| AC-10 | `install.sh` exit 1 nếu downloaded archive corrupt hoặc empty | truncate file → error message |
+| AC-11 | release.yml Package step include native libs trong archive | unzip/untar release artifact → thấy .so/.dylib/.dll |
 
 ## Files
 
-- `install.sh` (rewrite — replace local-build version)
-- `Install.ps1` (rewrite — replace local-build version, rename từ `install.ps1`)
-- `.github/workflows/release.yml` (thêm sync step cho scripts)
-- `backlog/wiki/release-runbook.md` (cập nhật install instructions)
+- `install.sh` (rewrite — replace local-build version; local dev dùng `deploy.ps1`, không bị ảnh hưởng)
+- `install.ps1` → rename thành `Install.ps1` (rewrite — online download version)
+- `.github/workflows/release.yml` (2 changes: Package step + sync step)
+- `backlog/wiki/release-runbook.md` (cập nhật install instructions + Windows one-liner)
 
 ## Effort
 
-~3h: install.sh online (1.5h) + Install.ps1 online (1h) + release.yml wiring (0.5h)
+~4h: release.yml Package fix (0.5h) + install.sh online (1.5h) + Install.ps1 online (1h) + release.yml sync wiring (0.5h) + README/runbook (0.5h)
