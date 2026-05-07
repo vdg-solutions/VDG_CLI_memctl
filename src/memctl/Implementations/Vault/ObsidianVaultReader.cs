@@ -170,6 +170,56 @@ public sealed class ObsidianVaultReader : IVaultReader
         File.WriteAllText(absolutePath, fm + body, Encoding.UTF8);
     }
 
+    public void MarkAsDistilled(string absolutePath, DateTime distilledAt, string[] distilledNoteRelPaths)
+    {
+        var raw   = File.ReadAllText(absolutePath, Encoding.UTF8);
+        var match = FrontmatterPattern.Match(raw);
+
+        var fm = new StringBuilder();
+        fm.AppendLine("---");
+
+        if (match.Success)
+        {
+            // Preserve existing frontmatter, strip any prior distilled fields (idempotent)
+            var skipKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                { "distilled", "distilled_at", "distilled_notes" };
+            var lines    = match.Groups[1].Value.Split('\n');
+            var skipList = false;
+
+            foreach (var line in lines)
+            {
+                var trimmed = line.TrimEnd();
+                if (trimmed.Length == 0) continue;
+
+                var colonIdx = trimmed.IndexOf(':');
+                if (colonIdx > 0 && !trimmed.StartsWith(' ') && !trimmed.StartsWith("- "))
+                {
+                    var key = trimmed[..colonIdx].Trim();
+                    skipList = skipKeys.Contains(key);
+                    if (skipList) continue;
+                }
+                else if (skipList && (trimmed.StartsWith("  -") || trimmed.StartsWith("- ")))
+                    continue;
+                else
+                    skipList = false;
+
+                fm.AppendLine(trimmed);
+            }
+        }
+
+        fm.AppendLine("distilled: true");
+        fm.AppendLine($"distilled_at: {distilledAt:O}");
+        if (distilledNoteRelPaths.Length > 0)
+        {
+            fm.AppendLine("distilled_notes:");
+            foreach (var p in distilledNoteRelPaths) fm.AppendLine($"  - \"{p}\"");
+        }
+        fm.AppendLine("---");
+
+        var body = match.Success ? raw[match.Length..] : "\n" + raw;
+        File.WriteAllText(absolutePath, fm + body, Encoding.UTF8);
+    }
+
     // --- helpers ---
 
     private static (Dictionary<string, object?> fm, string body) SplitFrontmatter(string raw)

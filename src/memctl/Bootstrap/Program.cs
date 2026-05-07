@@ -393,6 +393,36 @@ orgCmd.SetHandler(async ctx =>
 });
 root.AddCommand(orgCmd);
 
+// --- distill ---
+var distillConvOpt   = new Option<string?>("--conversation", "Distill a specific conversation by ID or path");
+var distillDryRunOpt = new Option<bool>   ("--dry-run",      "Preview extractions without writing");
+var distillSinceOpt  = new Option<string?>("--since",        "Only distill conversations after this date (YYYY-MM-DD)");
+var distillCmd       = new Command("distill", "Extract long-term memory from conversations (Layer 1 → Layer 2)");
+distillCmd.AddOption(distillConvOpt);
+distillCmd.AddOption(distillDryRunOpt);
+distillCmd.AddOption(distillSinceOpt);
+distillCmd.SetHandler(async ctx =>
+{
+    var g = G(ctx);
+    if (RequireVault(g, ctx) is not { } vault) return;
+    if (g.LlmUrl is null || g.LlmModel is null)
+    {
+        ResultPrinter.Print(MemctlOutcome.Fail("distill", "--llm-url and --llm-model are required"));
+        ctx.ExitCode = 1;
+        return;
+    }
+    var llm     = LlmClient(g)!;
+    var convId  = ctx.ParseResult.GetValueForOption(distillConvOpt);
+    var dryRun  = ctx.ParseResult.GetValueForOption(distillDryRunOpt);
+    var sinceStr = ctx.ParseResult.GetValueForOption(distillSinceOpt);
+    DateTime? since = sinceStr is not null ? DateTime.Parse(sinceStr).ToUniversalTime() : null;
+    var op      = new DistillOperator(vaultReader, noteIndex, llm);
+    var outcome = await op.ExecuteAsync(vault, convId, since, dryRun, ctx.GetCancellationToken());
+    ResultPrinter.Print(outcome);
+    ctx.ExitCode = outcome.Success ? 0 : 1;
+});
+root.AddCommand(distillCmd);
+
 // --- status ---
 var statusCmd = new Command("status", "Check model and vault readiness");
 statusCmd.SetHandler(ctx =>

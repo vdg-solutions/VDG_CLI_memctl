@@ -89,6 +89,96 @@ public sealed class OpenAiLlmClient : ILlmClient
         }
     }
 
+    private const int MaxDistillInputChars = 16_000;
+
+    public async Task<DistillResult> DistillAsync(string conversationContent, IReadOnlyList<Note> existingNotes, CancellationToken ct = default)
+    {
+        var truncated = conversationContent.Length > MaxDistillInputChars
+            ? conversationContent[..MaxDistillInputChars]
+            : conversationContent;
+
+        var noteContext = existingNotes.Take(50)
+            .Select(n => $"- {n.Title} [{string.Join(", ", n.Tags)}]")
+            .ToList();
+
+        var existingSection = noteContext.Count > 0
+            ? $"\n\nExisting vault notes (link targets only from this list):\n{string.Join('\n', noteContext)}"
+            : "";
+
+        var prompt = $$"""
+            You are a memory consolidation system. Read the conversation below and extract high-signal items worth remembering long-term.
+
+            For each item return a JSON extraction with:
+            - "type": "decision" | "pattern" | "lesson"
+            - "title": concise declarative title (string)
+            - "content": full markdown content, 3rd-person declarative, no filler (string)
+            - "tags": lowercase snake_case tags (array of strings)
+            - "links": titles of related vault notes from the existing list only (array of strings)
+            - "weight": importance 1.0-1.5 (float)
+            - "rationale": one sentence why this is worth remembering (string)
+
+            Return ONLY valid JSON with key "extractions" containing an array. Empty array if nothing is worth remembering.
+            {{existingSection}}
+
+            Conversation:
+            {{truncated}}
+            """;
+
+        var request = new OpenAiChatRequest
+        {
+            Model          = _model,
+            Messages       = [new OpenAiChatMessage { Role = "user", Content = prompt }],
+            ResponseFormat = new OpenAiResponseFormat { Type = "json_object" },
+            MaxTokens      = 2048,
+        };
+
+        var json = JsonSerializer.Serialize(request, OpenAiJsonContext.Default.OpenAiChatRequest);
+        using var httpReq = new HttpRequestMessage(HttpMethod.Post, "chat/completions")
+        {
+            Content = new StringContent(json, Encoding.UTF8, "application/json")
+        };
+
+        using var resp = await _http.SendAsync(httpReq, ct);
+        resp.EnsureSuccessStatusCode();
+
+        var body = await resp.Content.ReadAsStringAsync(ct);
+        using var doc = JsonDocument.Parse(body);
+
+        var text = doc.RootElement
+            .GetProperty("choices")[0]
+            .GetProperty("message")
+            .GetProperty("content")
+            .GetString() ?? "{}";
+
+        try
+        {
+            using var result = JsonDocument.Parse(text);
+            if (!result.RootElement.TryGetProperty("extractions", out var arr)
+                || arr.ValueKind != JsonValueKind.Array)
+                return new DistillResult([]);
+
+            var notes = arr.EnumerateArray().Select(e =>
+            {
+                var weight = e.TryGetProperty("weight", out var w) ? (float)w.GetDouble() : 1.0f;
+                return new DistilledNote(
+                    Type:      e.TryGetProperty("type",      out var t) ? t.GetString() ?? "lesson" : "lesson",
+                    Title:     e.TryGetProperty("title",     out var ti) ? ti.GetString() ?? "" : "",
+                    Content:   e.TryGetProperty("content",   out var c) ? c.GetString() ?? "" : "",
+                    Tags:      ParseStringArray(e, "tags"),
+                    Links:     ParseStringArray(e, "links"),
+                    Weight:    Math.Clamp(weight, 1.0f, 1.5f),
+                    Rationale: e.TryGetProperty("rationale", out var r) ? r.GetString() ?? "" : "");
+            }).ToArray();
+
+            return new DistillResult(notes);
+        }
+        catch
+        {
+            /* LLM returned invalid JSON — return empty result */
+            return new DistillResult([]);
+        }
+    }
+
     private static string[] ParseStringArray(JsonElement root, string key)
     {
         if (!root.TryGetProperty(key, out var el) || el.ValueKind != JsonValueKind.Array)
