@@ -798,6 +798,37 @@ migrateTagsCmd.SetHandler(ctx =>
 });
 root.AddCommand(migrateTagsCmd);
 
+// --- config ---
+var configCmd    = new Command("config", "Manage memctl configuration");
+var configSetCmd = new Command("set", "Set a config value");
+var cfgKeyArg    = new Argument<string>("key",   "Config key (distill-threshold)");
+var cfgValArg    = new Argument<string>("value", "Value to set");
+configSetCmd.AddArgument(cfgKeyArg);
+configSetCmd.AddArgument(cfgValArg);
+configSetCmd.SetHandler(ctx =>
+{
+    var g   = G(ctx);
+    if (RequireVault(g, ctx) is not { } vault) return;
+    var key = ctx.ParseResult.GetValueForArgument(cfgKeyArg);
+    var val = ctx.ParseResult.GetValueForArgument(cfgValArg);
+    if (!key.Equals("distill-threshold", StringComparison.OrdinalIgnoreCase))
+    {
+        ResultPrinter.Print(MemctlOutcome.Fail("config", $"Unknown config key: '{key}'. Supported: distill-threshold"));
+        ctx.ExitCode = 1;
+        return;
+    }
+    if (!int.TryParse(val, out var n) || n <= 0)
+    {
+        ResultPrinter.Print(MemctlOutcome.Fail("config", $"Invalid value '{val}' — distill-threshold must be a positive integer"));
+        ctx.ExitCode = 1;
+        return;
+    }
+    Memctl.Operators.DistillStateStore.SetThreshold(vault, n);
+    ResultPrinter.Print(MemctlOutcome.Ok("config", $"distill-threshold set to {n}"));
+});
+configCmd.AddCommand(configSetCmd);
+root.AddCommand(configCmd);
+
 // --- hook-status ---
 var hookStatusCmd = new Command("hook-status", "Show recent hook activity (capture, context-inject) for debug");
 hookStatusCmd.SetHandler(ctx =>

@@ -57,12 +57,23 @@ public sealed class ContextInjectOperator(IVaultReader vaultReader, INoteIndex i
             }
         }
 
-        if (results.Count == 0) return null;
+        var context = results.Count == 0 ? null : FormatContext(results);
 
-        foreach (var note in results)
-            index.IncrementAccess(note.Id);
+        if (results.Count > 0)
+            foreach (var note in results)
+                index.IncrementAccess(note.Id);
 
-        return FormatContext(results);
+        var rec = BuildRecommendation(vaultPath);
+        if (rec is null) return context;
+        return context is null ? rec : context + rec;
+    }
+
+    private static string? BuildRecommendation(string vaultPath)
+    {
+        if (!DistillStateStore.ShouldRecommend(vaultPath)) return null;
+        var (count, threshold, lastAt) = DistillStateStore.GetState(vaultPath);
+        var lastStr = lastAt.HasValue ? lastAt.Value.ToString("O") : "never";
+        return $"\n## Distill Recommendation\n{count}/{threshold} conversations since last distill (last: {lastStr}).\nRun `memctl distill` to consolidate L1 → L2 memory.\n";
     }
 
     private IReadOnlyList<Note> SearchKeywords(IReadOnlyList<string> keywords)
