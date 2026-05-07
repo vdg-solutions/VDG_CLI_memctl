@@ -179,6 +179,87 @@ public sealed class OpenAiLlmClient : ILlmClient
         }
     }
 
+    public async Task<ContradictionResult> CheckContradictionAsync(
+        DistilledNote       newNote,
+        IReadOnlyList<Note> candidates,
+        CancellationToken   ct = default)
+    {
+        var candidateList = candidates
+            .Select(c => $"- id: {c.Id}\n  title: {c.Title}\n  content: {c.Content[..Math.Min(c.Content.Length, 500)]}")
+            .ToList();
+
+        var prompt = $$"""
+            You are a memory quality-control system. Determine whether the new memory note contradicts any existing note.
+
+            New note:
+            title: {{newNote.Title}}
+            type: {{newNote.Type}}
+            content: {{newNote.Content[..Math.Min(newNote.Content.Length, 1000)]}}
+
+            Existing notes of the same type:
+            {{string.Join('\n', candidateList)}}
+
+            Return ONLY a JSON object with:
+            - "contradicts": boolean — true if any existing note directly conflicts with the new note
+            - "existing_id": string | null — ID of the contradicting note (from the list above), null if no contradiction
+            - "resolution": "keep_new" | "keep_existing" | "merge" — which note to keep (only relevant when contradicts=true)
+            - "merged_content": string | null — merged markdown content (only when resolution="merge"), null otherwise
+            - "rationale": string — one sentence explanation
+            """;
+
+        var request = new OpenAiChatRequest
+        {
+            Model          = _model,
+            Messages       = [new OpenAiChatMessage { Role = "user", Content = prompt }],
+            ResponseFormat = new OpenAiResponseFormat { Type = "json_object" },
+            MaxTokens      = 1024,
+        };
+
+        var json = JsonSerializer.Serialize(request, OpenAiJsonContext.Default.OpenAiChatRequest);
+        using var httpReq = new HttpRequestMessage(HttpMethod.Post, "chat/completions")
+        {
+            Content = new StringContent(json, Encoding.UTF8, "application/json")
+        };
+
+        using var resp = await _http.SendAsync(httpReq, ct);
+        resp.EnsureSuccessStatusCode();
+
+        var body = await resp.Content.ReadAsStringAsync(ct);
+        using var doc = JsonDocument.Parse(body);
+
+        var text = doc.RootElement
+            .GetProperty("choices")[0]
+            .GetProperty("message")
+            .GetProperty("content")
+            .GetString() ?? "{}";
+
+        try
+        {
+            using var result = JsonDocument.Parse(text);
+            var root = result.RootElement;
+
+            var contradicts = root.TryGetProperty("contradicts", out var cv) && cv.GetBoolean();
+            var existingId  = root.TryGetProperty("existing_id", out var ei) ? ei.GetString() : null;
+            var resStr      = root.TryGetProperty("resolution",  out var rv) ? rv.GetString() : null;
+            var merged      = root.TryGetProperty("merged_content", out var mc) ? mc.GetString() : null;
+            var rationale   = root.TryGetProperty("rationale",   out var rt) ? rt.GetString() ?? "" : "";
+
+            var resolution = resStr switch
+            {
+                "keep_existing" => ContradictionResolution.KeepExisting,
+                "merge"         => ContradictionResolution.Merge,
+                _               => ContradictionResolution.KeepNew,
+            };
+
+            return new ContradictionResult(contradicts, existingId, resolution, merged, rationale);
+        }
+        catch
+        {
+            /* LLM returned invalid JSON — no contradiction */
+            return new ContradictionResult(false, null, ContradictionResolution.KeepNew, null, "");
+        }
+    }
+
     private static string[] ParseStringArray(JsonElement root, string key)
     {
         if (!root.TryGetProperty(key, out var el) || el.ValueKind != JsonValueKind.Array)

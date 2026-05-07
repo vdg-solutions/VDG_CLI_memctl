@@ -99,6 +99,9 @@ public sealed class ObsidianVaultReader : IVaultReader
         sb.AppendLine($"created: {note.Created:O}");
         sb.AppendLine($"modified: {note.Modified:O}");
 
+        if (note.Archived)
+            sb.AppendLine("archived: true");
+
         if (note.Tags.Length > 0)
         {
             sb.AppendLine("tags:");
