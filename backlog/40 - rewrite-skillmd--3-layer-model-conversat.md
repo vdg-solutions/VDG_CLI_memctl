@@ -2,7 +2,7 @@
 id: 40
 type: task
 title: Rewrite SKILL.md — 3-layer model, conversation terminology, distill
-status: Todo
+status: In Progress
 priority: high
 tags:
 - docs,skill,memory
