@@ -2,7 +2,7 @@
 id: 42
 type: task
 title: Online installer — curl-pipe install from GitHub Releases
-status: Todo
+status: Closed
 priority: normal
 tags:
 - install,distribution
@@ -173,3 +173,7 @@ README nên document cả hai. Option 1 là primary.
 ## Effort
 
 ~4h: release.yml Package fix (0.5h) + install.sh online (1.5h) + Install.ps1 online (1h) + release.yml sync wiring (0.5h) + README/runbook (0.5h)
+
+## Comments
+
+**2026-05-07 11:45 user:** PAUSED — cần quyết định: (1) AOT only hay giữ nupkg trong public release? (2) install scripts authored ở public repo (memctl-releases) hay sync từ private? Implement sau khi có quyết định.
