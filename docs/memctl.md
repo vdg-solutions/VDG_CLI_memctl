@@ -51,6 +51,7 @@ memctl search "<task>"      # find relevant prior decisions
 | `memctl model list` | List downloaded models |
 | `memctl model use <name>` | Switch model (re-ingest required) |
 | `memctl hook-status` | Recent capture + context-inject activity |
+| `memctl config set distill-threshold <n>` | Set conversation count before distill recommendation (default: 5) |
 
 ### Encode
 
@@ -63,6 +64,7 @@ memctl search "<task>"      # find relevant prior decisions
 | `memctl distill --conversation <id>` | Distill one specific conversation |
 | `memctl distill --dry-run` | Preview extractions without writing |
 | `memctl distill --since <YYYY-MM-DD>` | Only conversations after date |
+| `memctl distill --resolve-contradictions` | Check + resolve conflicts with existing L2 notes (opt-in) |
 | `memctl organize` | LLM auto-tags + auto-links all notes. `--since <date>` for recent only |
 | `memctl weight <id> <value>` | Set importance (0=archive, 1.0=normal, 1.5=decay-resistant) |
 | `memctl decay --days <n>` | Reduce stale note weights |
@@ -154,6 +156,8 @@ Shared vault: `export MEMCTL_SHARED_VAULT=$HOME/memctl-personal/.memctl`
 ```
 
 Client rules: ignore non-zero exit; Stop timeout 10s; UserPromptSubmit timeout 5s; never block on failure.
+
+**Auto-distill recommendation:** `capture` (Stop hook) increments an internal counter per new conversation. When counter ≥ threshold (default 5), `context-inject` appends a `## Distill Recommendation` block to the injected context. On seeing it, run `memctl distill` — which resets the counter. `--dry-run` does NOT reset. Configure threshold: `memctl config set distill-threshold <n>`.
 
 ---
 
