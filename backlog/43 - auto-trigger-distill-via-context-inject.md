@@ -68,7 +68,7 @@ LLM tự quyết định có trigger hay không — không force, không block.
 
 ## Implementation
 
-**`src/memctl/Implementations/Vault/DistillStateStore.cs`** (NEW)
+**`src/memctl/Operators/DistillStateStore.cs`** (NEW — `Operators/` layer, same as `EventLog.cs`)
 
 ```csharp
 internal static class DistillStateStore
@@ -117,7 +117,7 @@ internal static class DistillStateStore
 
 ## Files
 
-- `src/memctl/Implementations/Vault/DistillStateStore.cs` (new)
+- `src/memctl/Operators/DistillStateStore.cs` (new — same layer as `EventLog.cs`, same static utility pattern)
 - `src/memctl/Operators/CaptureOperator.cs`
 - `src/memctl/Operators/ContextInjectOperator.cs`
 - `src/memctl/Operators/DistillOperator.cs`

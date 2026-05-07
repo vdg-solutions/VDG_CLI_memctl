@@ -64,6 +64,7 @@ Error handling: if `CheckContradictionAsync` throws, log via `EventLog.Record` a
 
 - Search candidates: `index.SearchBm25(note.Title, 5)` filter by same type (decision/pattern/lesson)
 - Only check when candidates exist — skip LLM call if no same-type candidates found
+- **Validate ExistingId**: after LLM returns `ContradictionResult`, verify `ExistingId` is in the candidate list (`candidates.Any(c => c.Id == result.ExistingId)`). If not found → treat as `Contradicts=false`. Prevents LLM hallucination silently archiving wrong note.
 - `archived: true` + tag `superseded` set in BOTH file frontmatter AND index (`index.Upsert`) — index must reflect archived state for `GetAll(false)` to exclude it
 - `superseded` notes: set `Weight = 0` to make them decay-immune (already at floor) — prevents `memctl decay` from further modifying them
 - Log resolution: `Console.Error.WriteLine($"[distill] contradiction resolved: {resolution} — {rationale}")`
