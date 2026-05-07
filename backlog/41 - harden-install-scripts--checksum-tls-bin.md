@@ -2,7 +2,7 @@
 id: 41
 type: task
 title: Harden install scripts — binary verify, rename-aside, macOS signing
-status: Todo
+status: Done
 priority: normal
 tags:
 - install,security
@@ -100,3 +100,7 @@ main "$@"
 ## Effort
 
 ~2h: ps1 rename+verify+dir (0.75h) + sh main wrapper+codesign+verify+dir (0.75h) + test (0.5h)
+
+## Comments
+
+**2026-05-07 10:40 user:** Pipeline complete. Renamed-aside, binary verify+rollback, macOS signing, --dir flag — all 6 ACs. Merged to main.

@@ -2,7 +2,7 @@
 id: 38
 type: epic
 title: Memory & Observation layer — chats, events, consolidation
-status: Todo
+status: Done
 priority: high
 children:
 - 36
@@ -36,3 +36,7 @@ Epic này bổ sung lớp Memory & Observation đầy đủ: conversation lưu �
 
 - Cross-vault lesson sync — wishlist
 - Scheduled/automatic distillation — manual `memctl distill` only in this epic
+
+## Comments
+
+**2026-05-07 10:40 user:** Epic complete. All children done: #36 (conversation rename), #37 (EventLog), #39 (distill). Auto-closed.

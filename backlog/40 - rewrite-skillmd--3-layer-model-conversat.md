@@ -2,7 +2,7 @@
 id: 40
 type: task
 title: Rewrite SKILL.md — 3-layer model, conversation terminology, distill
-status: In Progress
+status: Done
 priority: high
 tags:
 - docs,skill,memory
@@ -75,3 +75,7 @@ Sau khi #39 xong. Placeholder nếu làm trước.
 
 ## Dependency
 Làm sau #39 để viết distill section đầy đủ. Hoặc làm trước với `distill` placeholder.
+
+## Comments
+
+**2026-05-07 10:39 user:** Pipeline complete. SKILL.md: 880 → 204 lines. All 8 ACs passed. Merged to main.

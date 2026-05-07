@@ -2,9 +2,9 @@
 id: 37
 type: task
 title: General event logging system (EventLog + events/ folder)
-status: Todo
+status: Done
 priority: normal
-parent: "38"
+parent: 38
 tags:
 - events,logging,vault
 created: 2026-05-07
@@ -143,3 +143,7 @@ internal static class EventLog
 
 ## Effort
 ~3h: vault init (0.25h) + EventLog class (0.75h) + wire 2 operators (0.5h) + tests (1h) + verify (0.5h)
+
+## Comments
+
+**2026-05-07 10:28 user:** Pipeline complete. Merged to main. 67/67 tests passing.

@@ -2,9 +2,9 @@
 id: 39
 type: task
 title: memctl distill — LLM-driven conversation-to-memory extraction
-status: Todo
+status: Done
 priority: high
-parent: "38"
+parent: 38
 tags:
 - memory,distillation,llm
 created: 2026-05-07
@@ -241,3 +241,7 @@ Execute(vaultPath, conversationId?, since?, dryRun):
 ## Effort
 
 ~5h: entities + ILlmClient (0.5h) + IVaultReader/MarkAsDistilled (1h) + OpenAiLlmClient impl (1h) + DistillOperator (1.5h) + Program.cs wire (0.25h) + tests (0.75h)
+
+## Comments
+
+**2026-05-07 10:34 user:** Pipeline complete. Merged to main. 70/70 tests passing.
