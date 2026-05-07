@@ -659,12 +659,12 @@ root.AddCommand(fetchCmd);
 // --- capture ---
 var capRoleOpt    = new Option<string?>("--role",       "Turn role (user | assistant) — direct mode");
 var capTextOpt    = new Option<string?>("--text",       "Turn content — direct mode");
-var capSessionOpt = new Option<string?>("--session-id", "Session ID override");
+var capConversationOpt = new Option<string?>("--conversation-id", "Conversation ID override");
 var capDryRunOpt  = new Option<bool>   ("--dry-run",    "Print what would be saved; no disk write");
 var captureCmd     = new Command("capture", "Auto-capture conversation turns (Hook Protocol v1)");
 captureCmd.AddOption(capRoleOpt);
 captureCmd.AddOption(capTextOpt);
-captureCmd.AddOption(capSessionOpt);
+captureCmd.AddOption(capConversationOpt);
 captureCmd.AddOption(capDryRunOpt);
 captureCmd.SetHandler(async ctx =>
 {
@@ -673,7 +673,7 @@ captureCmd.SetHandler(async ctx =>
         var pr     = ctx.ParseResult;
         var role   = pr.GetValueForOption(capRoleOpt);
         var text   = pr.GetValueForOption(capTextOpt);
-        var sesId  = pr.GetValueForOption(capSessionOpt);
+        var convId = pr.GetValueForOption(capConversationOpt);
         var dryRun = pr.GetValueForOption(capDryRunOpt);
         var g      = G(ctx);
 
@@ -693,7 +693,7 @@ captureCmd.SetHandler(async ctx =>
             catch { /* embedding optional */ }
             var turns  = new (string Role, string Content)[] { (role, text) };
             var op     = new CaptureOperator(vaultReader, noteIndex, emb);
-            var result = op.Execute(vault, sesId, turns, dryRun);
+            var result = op.Execute(vault, convId, turns, dryRun);
             Memctl.Operators.HookLog.Record(vault, "capture", result.Success, result.Success ? null : result.Message);
             if (dryRun) ResultPrinter.Print(result);
             ctx.ExitCode = 0;
@@ -724,7 +724,7 @@ captureCmd.SetHandler(async ctx =>
 
         var turns2 = payload.Transcript.Select(t => (t.Role, t.Content)).ToArray();
         var op2    = new CaptureOperator(vaultReader, noteIndex, emb2);
-        var res    = op2.Execute(vaultPath, payload.SessionId ?? sesId, turns2, dryRun);
+        var res    = op2.Execute(vaultPath, payload.ConversationId ?? convId, turns2, dryRun);
         Memctl.Operators.HookLog.Record(vaultPath, "capture", res.Success, res.Success ? null : res.Message);
         if (dryRun) ResultPrinter.Print(res);
     }

@@ -8,7 +8,7 @@ namespace Memctl.Operators;
 
 public sealed class CaptureOperator(IVaultReader vaultReader, INoteIndex index, GemmaEmbeddingEngine? embedding)
 {
-    private const float SessionNoteWeight = 0.5f;
+    private const float ConversationNoteWeight = 0.5f;
     private const int   MinTurnLength     = 50;
 
     private static readonly Regex CodeBlockPattern =
@@ -16,7 +16,7 @@ public sealed class CaptureOperator(IVaultReader vaultReader, INoteIndex index, 
 
     public MemctlOutcome Execute(
         string  vaultPath,
-        string? sessionIdRaw,
+        string? conversationIdRaw,
         IReadOnlyList<(string Role, string Content)> turns,
         bool    dryRun)
     {
@@ -28,14 +28,14 @@ public sealed class CaptureOperator(IVaultReader vaultReader, INoteIndex index, 
         if (filteredTurns.Count == 0)
             return MemctlOutcome.Ok("capture", "no meaningful turns");
 
-        var safeId  = SanitizeSessionId(sessionIdRaw ?? GenerateSessionId());
+        var safeId  = SanitizeConversationId(conversationIdRaw ?? GenerateConversationId());
         var date    = DateTime.UtcNow.ToString("yyyy-MM-dd");
-        var relPath = $"sessions/{date}-{safeId}.md";
+        var relPath = $"chats/{date}-{safeId}.md";
         var absPath = Path.Combine(vaultPath, relPath);
 
         if (dryRun)
         {
-            var preview = $"# Session {date} — {safeId}\n\n{FormatTurns(filteredTurns)}";
+            var preview = $"# Conversation {date} — {safeId}\n\n{FormatTurns(filteredTurns)}";
             return MemctlOutcome.Ok("capture", preview,
                 new CaptureReport(true, relPath, filteredTurns.Count, null));
         }
@@ -51,18 +51,18 @@ public sealed class CaptureOperator(IVaultReader vaultReader, INoteIndex index, 
         string date, string safeId,
         IReadOnlyList<(string Role, string Content)> turns)
     {
-        var content = $"# Session {date} — {safeId}\n\n{FormatTurns(turns)}";
+        var content = $"# Conversation {date} — {safeId}\n\n{FormatTurns(turns)}";
         var note = new Note
         {
             Id       = Guid.NewGuid().ToString("N")[..16],
             FilePath = relPath,
-            Title    = $"Session {date} — {safeId}",
+            Title    = $"Conversation {date} — {safeId}",
             Content  = content,
-            Tags     = ["session"],
+            Tags     = ["conversation"],
             Links    = [],
             Created  = DateTime.UtcNow,
             Modified = DateTime.UtcNow,
-            Weight   = SessionNoteWeight,
+            Weight   = ConversationNoteWeight,
         };
         var emb    = embedding?.Embed($"{note.Title}\n{note.Content}");
         var stored = emb is not null ? note with { Embedding = emb } : note;
@@ -70,8 +70,8 @@ public sealed class CaptureOperator(IVaultReader vaultReader, INoteIndex index, 
         vaultReader.WriteNote(stored, vaultPath, relPath);
         index.Upsert(stored);
 
-        return MemctlOutcome.Ok("capture", $"Created session note: {relPath}",
-            new CaptureReport(false, relPath, turns.Count, SessionNoteWeight));
+        return MemctlOutcome.Ok("capture", $"Created conversation note: {relPath}",
+            new CaptureReport(false, relPath, turns.Count, ConversationNoteWeight));
     }
 
     private MemctlOutcome AppendNote(
@@ -79,7 +79,7 @@ public sealed class CaptureOperator(IVaultReader vaultReader, INoteIndex index, 
         IReadOnlyList<(string Role, string Content)> turns)
     {
         var existing = index.GetByFilePath(relPath)
-                    ?? vaultReader.ParseNote(absPath, vaultPath) with { Weight = SessionNoteWeight };
+                    ?? vaultReader.ParseNote(absPath, vaultPath) with { Weight = ConversationNoteWeight };
 
         var newText   = FormatTurns(turns);
         var separator = existing.Content.EndsWith('\n') ? "" : "\n";
@@ -91,7 +91,7 @@ public sealed class CaptureOperator(IVaultReader vaultReader, INoteIndex index, 
         vaultReader.WriteNote(stored, vaultPath, relPath);
         index.Upsert(stored);
 
-        return MemctlOutcome.Ok("capture", $"Appended to session note: {relPath}",
+        return MemctlOutcome.Ok("capture", $"Appended to conversation note: {relPath}",
             new CaptureReport(false, relPath, turns.Count, null));
     }
 
@@ -125,9 +125,9 @@ public sealed class CaptureOperator(IVaultReader vaultReader, INoteIndex index, 
         return sb.ToString();
     }
 
-    private static string SanitizeSessionId(string id)
+    private static string SanitizeConversationId(string id)
         => Regex.Replace(id, @"[^\w\-]", "_").Trim('_');
 
-    private static string GenerateSessionId()
+    private static string GenerateConversationId()
         => Guid.NewGuid().ToString("N")[..8];
 }
