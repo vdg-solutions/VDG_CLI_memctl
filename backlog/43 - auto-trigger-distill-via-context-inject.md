@@ -2,7 +2,7 @@
 id: 43
 type: task
 title: Auto-trigger distill via context-inject threshold counter
-status: Todo
+status: In Progress
 priority: normal
 tags:
 - memory,distill,hooks
