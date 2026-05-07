@@ -2,7 +2,7 @@
 id: 44
 type: task
 title: Contradiction resolution in memctl distill
-status: In Progress
+status: In Review
 priority: low
 tags:
 - memory,distill,qc
@@ -104,3 +104,9 @@ Independent of #43 — no conflict.
 ## Comments
 
 **2026-05-07 23:46 user:** Phase 0: branch created, starting SDLC pipeline
+
+**2026-05-07 23:46 user:** Phase 1 complete: Spec created at docs/specs/44-spec.md
+
+**2026-05-07 23:47 user:** Phase 2 complete: Design created at docs/designs/44-design.md
+
+**2026-05-07 23:57 user:** Phase 3 complete: Build — 90 tests pass (10 new). Moving to QC.
