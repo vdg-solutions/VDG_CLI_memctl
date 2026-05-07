@@ -81,6 +81,7 @@ public sealed class IngestOperator(IVaultReader vault, INoteIndex index, GemmaEm
             semanticHint = "Semantic lint: never run. Run: memctl lint --semantic";
         }
 
+        EventLog.Record(vaultPath, "operator_run", "info", "ingest", $"{added} indexed, {pruned} pruned");
         return MemctlOutcome.Ok("ingest", $"Indexed {added}/{files.Count} notes, pruned {pruned}",
             new IngestReport(added, files.Count, vaultPath, model, semanticHint, pruned));
     }

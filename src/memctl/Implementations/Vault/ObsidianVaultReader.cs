@@ -30,6 +30,7 @@ public sealed class ObsidianVaultReader : IVaultReader
         var links    = ParseLinks(fm, body);
         var created  = ParseDate(fm, "created",  fileInfo.CreationTimeUtc);
         var modified = ParseDate(fm, "modified", fileInfo.LastWriteTimeUtc);
+        var archived = fm.TryGetValue("archived", out var fmArch) && fmArch is true;
 
         return new Note
         {
@@ -41,6 +42,7 @@ public sealed class ObsidianVaultReader : IVaultReader
             Links    = links,
             Created  = created,
             Modified = modified,
+            Archived = archived,
         };
     }
 
@@ -60,7 +62,7 @@ public sealed class ObsidianVaultReader : IVaultReader
 
         // 7 semantic top-level dirs (writer ownership: tasks=/sdlc, patterns=/retro,
         // lessons=/qc-dream, decisions=/design, chats=Stop hook, attachments=tools, claude-memory=/qc-dream)
-        foreach (var d in new[] { "tasks", "patterns", "lessons", "decisions", "chats", "attachments", "claude-memory" })
+        foreach (var d in new[] { "tasks", "patterns", "lessons", "decisions", "chats", "attachments", "claude-memory", "events" })
             Directory.CreateDirectory(Path.Combine(vaultRoot, d));
 
         WriteIfAbsent(Path.Combine(vaultRoot, ".obsidian", "app.json"),        "{}");

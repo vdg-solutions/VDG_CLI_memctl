@@ -733,7 +733,11 @@ captureCmd.SetHandler(async ctx =>
         // NFR-002: hook never crash, but record the failure for debug
         var cwd = Directory.GetCurrentDirectory();
         var v   = VaultLocator.FindVaultFrom(cwd);
-        if (v is not null) Memctl.Operators.HookLog.Record(v, "capture", false, ex.Message);
+        if (v is not null)
+        {
+            Memctl.Operators.HookLog.Record(v, "capture", false, ex.Message);
+            Memctl.Operators.EventLog.Record(v, "hook_fired", "error", "capture", ex.Message);
+        }
     }
     ctx.ExitCode = 0;
 });
