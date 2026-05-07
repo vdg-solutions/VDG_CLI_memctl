@@ -69,6 +69,7 @@ public sealed class CaptureOperator(IVaultReader vaultReader, INoteIndex index, 
 
         vaultReader.WriteNote(stored, vaultPath, relPath);
         index.Upsert(stored);
+        EventLog.Record(vaultPath, "operator_run", "info", "capture", $"{turns.Count} turns → {relPath}");
 
         return MemctlOutcome.Ok("capture", $"Created conversation note: {relPath}",
             new CaptureReport(false, relPath, turns.Count, ConversationNoteWeight));
@@ -90,6 +91,7 @@ public sealed class CaptureOperator(IVaultReader vaultReader, INoteIndex index, 
 
         vaultReader.WriteNote(stored, vaultPath, relPath);
         index.Upsert(stored);
+        EventLog.Record(vaultPath, "operator_run", "info", "capture", $"appended {turns.Count} turns → {relPath}");
 
         return MemctlOutcome.Ok("capture", $"Appended to conversation note: {relPath}",
             new CaptureReport(false, relPath, turns.Count, null));

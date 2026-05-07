@@ -26,10 +26,11 @@ public sealed class SqliteNoteIndex : INoteIndex
         var linksJson      = JsonSerializer.Serialize(note.Links, MemctlJsonContext.Default.StringArray);
         var embeddingBytes = EmbeddingToBytes(note.Embedding);
 
-        // weight in INSERT (sets initial value) but excluded from UPDATE — preserve user-set values on re-ingest
+        // weight + archived set on INSERT only — preserve user-set values on re-ingest
+        var arch = note.Archived ? 1 : 0;
         Exec(@"
-            INSERT INTO notes (id, file_path, title, content, tags, links, created_at, modified_at, embedding, weight)
-            VALUES (@id, @fp, @title, @content, @tags, @links, @created, @modified, @emb, @weight)
+            INSERT INTO notes (id, file_path, title, content, tags, links, created_at, modified_at, embedding, weight, archived)
+            VALUES (@id, @fp, @title, @content, @tags, @links, @created, @modified, @emb, @weight, @arch)
             ON CONFLICT(id) DO UPDATE SET
                 file_path   = excluded.file_path,
                 title       = excluded.title,
@@ -47,7 +48,8 @@ public sealed class SqliteNoteIndex : INoteIndex
             ("@created", note.Created.ToString("O")),
             ("@modified",note.Modified.ToString("O")),
             ("@emb",     (object?)embeddingBytes ?? DBNull.Value),
-            ("@weight",  note.Weight));
+            ("@weight",  note.Weight),
+            ("@arch",    arch));
     }
 
     public void Delete(string noteId) =>
