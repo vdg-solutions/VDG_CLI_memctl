@@ -2,7 +2,7 @@
 id: 43
 type: task
 title: Auto-trigger distill via context-inject threshold counter
-status: Todo
+status: In Review
 priority: normal
 tags:
 - memory,distill,hooks
@@ -127,3 +127,11 @@ internal static class DistillStateStore
 ## Effort
 
 ~2.5h: DistillStateStore (1h) + wire into 3 operators (0.75h) + config command (0.25h) + tests (0.5h)
+
+## Comments
+
+**2026-05-07 23:40 user:** Phase 1 complete: Spec created at docs/specs/43-spec.md
+
+**2026-05-07 23:41 user:** Phase 2 complete: Design created at docs/designs/43-design.md
+
+**2026-05-07 23:44 user:** Phase 3 complete: Build — 80 tests pass (10 new). Moving to QC.

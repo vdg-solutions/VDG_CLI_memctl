@@ -86,6 +86,9 @@ public sealed class DistillOperator(IVaultReader vaultReader, INoteIndex index, 
             }
         }
 
+        if (!dryRun && pending.Count > 0)
+            DistillStateStore.Reset(vaultPath);
+
         var msg = dryRun
             ? $"dry-run: {pending.Count} conversations, {totalExtracted} extractions"
             : $"{pending.Count} conversations distilled, {totalExtracted} notes extracted";
