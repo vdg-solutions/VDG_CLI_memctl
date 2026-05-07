@@ -1,12 +1,16 @@
 ---
 id: 34
 type: task
-title: 'Prune stale DB entries on ingest when vault files are deleted'
-status: Todo
+title: Prune stale DB entries on ingest when vault files are deleted
+status: Done
 priority: high
-tags: [bug, ingest, data-integrity, index]
+tags:
+- bug
+- ingest
+- data-integrity
+- index
 created: 2026-05-04
-updated: 2026-05-04
+updated: 2026-05-07
 ---
 
 ## Description
@@ -122,3 +126,7 @@ memctl list 2>&1 | python3 -c "import sys,json; assert not any(n['id']=='$NOTE_I
 - Unit tests (3 cases): 1h
 - Smoke test + verify: 0.5h
 - PR + review: 0.25h
+
+## Comments
+
+**2026-05-07 10:22 user:** Pipeline complete. Implemented in feat(34) — already merged to main.

@@ -2,7 +2,7 @@
 id: 35
 type: task
 title: Add memctl delete <id> command to remove note from vault and index
-status: In Progress
+status: Done
 priority: medium
 tags:
 - feature
@@ -10,7 +10,7 @@ tags:
 - vault
 - index
 created: 2026-05-06
-updated: 2026-05-06
+updated: 2026-05-07
 ---
 
 ## Description
