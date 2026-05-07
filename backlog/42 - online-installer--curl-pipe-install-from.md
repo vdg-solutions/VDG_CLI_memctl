@@ -57,20 +57,31 @@ Target: `curl -fsSL https://raw.githubusercontent.com/vdg-solutions/memctl-relea
 
 **Current state**: `Package` job trong `release.yml` chỉ copy binary (`memctl`/`memctl.exe`) vào archive. Native libs **không có** trong `.zip`/`.tar.gz`. Nếu install script download archive về mà không có native libs thì binary không chạy được.
 
+**Verified via `dotnet publish -p:PublishAot=true -r win-x64`** — AOT output chứa:
+```
+memctl.exe
+e_sqlite3.dll
+onnxruntime.dll
+onnxruntime_providers_shared.dll
+onnxruntime.lib                   ← linker import lib, KHÔNG copy (không cần runtime)
+onnxruntime_providers_shared.lib  ← linker import lib, KHÔNG copy
+```
+Linux/macOS AOT output tương tự với `.so`/`.dylib` thay vì `.dll`.
+
 **Fix needed** — thêm vào Package step sau `cp "publish/memctl${EXT}" package/`:
 ```bash
-# Copy native libs produced by AOT publish
-find publish -name "*.so" -o -name "*.dylib" -o -name "*.dll" | grep -v memctl | xargs -I{} cp {} package/ 2>/dev/null || true
+# Windows: copy runtime DLLs only (not .lib linker files)
+if [ "$ARCHIVE" = "zip" ]; then
+  for lib in onnxruntime.dll e_sqlite3.dll onnxruntime_providers_shared.dll; do
+    [ -f "publish/$lib" ] && cp "publish/$lib" package/
+  done
+else
+  # Linux/macOS: copy .so/.dylib
+  find publish \( -name "*.so" -o -name "*.dylib" \) -exec cp {} package/ \;
+fi
 ```
 
-Windows build thì copy cụ thể:
-```bash
-for lib in onnxruntime.dll e_sqlite3.dll onnxruntime_providers_shared.dll; do
-  [ -f "publish/$lib" ] && cp "publish/$lib" package/ || true
-done
-```
-
-Verify: archive phải chứa ít nhất 1 `.so`/`.dylib`/`.dll` ngoài binary chính.
+Verify: archive phải chứa đúng 3 `.dll` (Windows) hoặc ≥1 `.so`/`.dylib` (Unix) ngoài binary chính.
 
 **Lưu ý**: `deploy.ps1` (local dev) build + install riêng biệt, không liên quan đến install.sh. Rewriting install.sh không ảnh hưởng dev workflow.
 
