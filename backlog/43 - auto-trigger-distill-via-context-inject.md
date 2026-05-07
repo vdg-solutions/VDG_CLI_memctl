@@ -69,38 +69,51 @@ LLM tự quyết định có trigger hay không — không force, không block.
 ## Implementation
 
 **`src/memctl/Implementations/Vault/DistillStateStore.cs`** (NEW)
-- `Increment(vaultPath)`: read JSON, +1, write back
-- `Reset(vaultPath)`: set conversations_since_distill=0, last_distill_at=now
-- `ShouldRecommend(vaultPath)`: return conversations_since_distill >= threshold
-- `GetState(vaultPath)`: return full state for context-inject message
-- State file path: `{vaultPath}/.obsidian/memctl/distill-state.json`
-- Thread-safe: retry-on-conflict (capture có thể concurrent)
-- Default threshold: 5 nếu file không tồn tại
+
+```csharp
+internal static class DistillStateStore
+{
+    internal static void Increment(string vaultPath) { ... }   // read JSON → +1 → write; best-effort (swallow all exceptions)
+    internal static void Reset(string vaultPath) { ... }       // conversations_since_distill=0, last_distill_at=now; best-effort
+    internal static bool ShouldRecommend(string vaultPath) { ... }  // return count >= threshold; returns false on any error
+    internal static (int count, int threshold, DateTime? lastAt) GetState(string vaultPath) { ... }
+}
+```
+
+- State file: `{vaultPath}/.obsidian/memctl/distill-state.json`
+- Default threshold: 5 (used when file missing or key absent)
+- **Best-effort: ALL methods catch-and-swallow exceptions** — same pattern as `EventLog.Record`. DistillStateStore MUST NOT crash CaptureOperator or ContextInjectOperator. Missing file = start from zero, not an error.
+- File conflict: write to temp file + `File.Move(..., overwrite: true)` — atomic on Windows/Linux, avoids partial write corruption.
 
 **`src/memctl/Operators/CaptureOperator.cs`**
-- Sau khi write conversation note: `DistillStateStore.Increment(vaultPath)`
+- `CreateNote` only: `DistillStateStore.Increment(vaultPath)` sau `EventLog.Record(...)`.
+- `AppendNote`: NO increment — appending to existing conversation is NOT a new conversation.
 
 **`src/memctl/Operators/ContextInjectOperator.cs`**
-- Sau khi build Memory Context block: check `DistillStateStore.ShouldRecommend(vaultPath)` → append recommendation
+- Sau khi `FormatContext(results)` returns: check `DistillStateStore.ShouldRecommend(vaultPath)`.
+- If true: append `"\n## Distill Recommendation\n{count}/{threshold} conversations since last distill (last: {lastAt}).\nRun \`memctl distill\` to consolidate L1 → L2 memory.\n"` to the returned string.
+- If `Execute` returns null (no vault notes): return recommendation-only string instead of null — LLM still sees it.
 
 **`src/memctl/Operators/DistillOperator.cs`**
-- Sau khi ExecuteAsync hoàn thành (non-dry-run): `DistillStateStore.Reset(vaultPath)`
+- Sau khi `ExecuteAsync` completes (non-dry-run, at least 1 conversation processed): `DistillStateStore.Reset(vaultPath)`
 
 **`src/memctl/Bootstrap/Program.cs`**
-- `memctl config set distill-threshold <n>` → write threshold vào distill-state.json
+- `memctl config set distill-threshold <n>` — narrow command, NOT a general config mechanism. Reads distill-state.json, updates only `threshold` key, writes back. Validates n > 0.
 
 ## Acceptance criteria
 
 | ID | Criterion | Verify |
 |----|-----------|--------|
-| AC-1 | `distill-state.json` được tạo tự động lần đầu capture chạy | run capture → file exists |
-| AC-2 | `conversations_since_distill` increment sau mỗi lần capture thành công | capture 3 lần → counter = 3 |
-| AC-3 | `context-inject` append recommendation khi counter >= threshold | threshold=2, capture 2 lần → output có "Distill Recommendation" |
+| AC-1 | `distill-state.json` tạo tự động lần đầu capture chạy | capture → file exists |
+| AC-2 | Counter chỉ increment ở `CreateNote`, không increment ở `AppendNote` | capture same conversation ID twice → counter = 1, not 2 |
+| AC-3 | `context-inject` append recommendation khi counter >= threshold | threshold=2, 2 new conversations → output có "Distill Recommendation" |
 | AC-4 | `context-inject` KHÔNG append nếu counter < threshold | counter=1, threshold=5 → không có recommendation |
-| AC-5 | `memctl distill` reset counter về 0 sau khi thành công | distill xong → counter = 0 |
-| AC-6 | `memctl distill --dry-run` KHÔNG reset counter | dry-run xong → counter unchanged |
-| AC-7 | `memctl config set distill-threshold 10` thay đổi threshold | set 10 → recommendation chỉ ở count=10 |
-| AC-8 | State file không bị ingest (không xuất hiện trong `memctl list`) | ingest xong → distill-state.json không trong index |
+| AC-5 | `context-inject` trả về recommendation ngay cả khi vault rỗng (không có notes) | empty vault, threshold met → output có recommendation |
+| AC-6 | `memctl distill` reset counter về 0 sau khi thành công | distill xong → counter = 0 |
+| AC-7 | `memctl distill --dry-run` KHÔNG reset counter | dry-run xong → counter unchanged |
+| AC-8 | `memctl config set distill-threshold 10` thay đổi threshold | set 10 → recommendation chỉ xuất hiện ở count=10 |
+| AC-9 | DistillStateStore errors không crash CaptureOperator | inject IO error vào Increment → capture vẫn succeed, note vẫn written |
+| AC-10 | File corrupt/invalid JSON → fallback về default state (count=0, threshold=5) | corrupt JSON → ShouldRecommend returns false, no crash |
 
 ## Files
 

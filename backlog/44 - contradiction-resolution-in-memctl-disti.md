@@ -35,52 +35,67 @@ Sau khi extract `DistilledNote[]` từ conversation, trước khi write L2 files
 `ILlmClient.CheckContradictionAsync(DistilledNote newNote, IReadOnlyList<Note> candidates)` → `ContradictionResult`
 
 ```csharp
+public enum ContradictionResolution { KeepNew, KeepExisting, Merge }
+
 public sealed record ContradictionResult(
-    bool Contradicts,
-    string? ExistingId,
-    string Resolution,   // "keep_new" | "keep_existing" | "merge"
-    string? MergedContent,
-    string Rationale);
+    bool                    Contradicts,
+    string?                 ExistingId,
+    ContradictionResolution Resolution,
+    string?                 MergedContent,
+    string                  Rationale);
 ```
+
+**Resolution là enum, không phải magic string** — type-safe, no switch-on-string anti-pattern.
 
 ### Flag
 
-`memctl distill --resolve-contradictions` (opt-in, default off) — vì tốn thêm LLM calls (1 call per extracted note).
+`memctl distill --resolve-contradictions` (opt-in, default off). Flag name committed — `--full` variant dropped.
 
-Hoặc `memctl distill --full` = distill + contradiction resolution.
+### Breaking change: ILlmClient gains new method
+
+`ILlmClient` là public interface — adding `CheckContradictionAsync` requires ALL existing implementations and test stubs to implement it. Affected:
+- `OpenAiLlmClient` — full impl
+- `CountingLlmClient` (in `DistillOperatorTests.cs`) — stub: return `new ContradictionResult(false, null, ContradictionResolution.KeepNew, null, "")`
+- `FixedResultLlmClient` (in `DistillOperatorTests.cs`) — same stub
+
+Error handling: if `CheckContradictionAsync` throws, log via `EventLog.Record` and treat as `Contradicts=false` (best-effort, proceed with extraction). Never abort distill on contradiction check failure.
 
 ## Implementation notes
 
-- Search candidates: `index.SearchBm25(note.Title, 5)` + filter bằng tag overlap
-- Chỉ check khi có candidates trong same type (decision vs decision, lesson vs lesson)
-- Log resolution decisions để user có thể review: `memctl distill --resolve-contradictions --verbose`
-- Archived notes (loser của resolution) set `archived: true` + tag `superseded` — không delete
+- Search candidates: `index.SearchBm25(note.Title, 5)` filter by same type (decision/pattern/lesson)
+- Only check when candidates exist — skip LLM call if no same-type candidates found
+- `archived: true` + tag `superseded` set in BOTH file frontmatter AND index (`index.Upsert`) — index must reflect archived state for `GetAll(false)` to exclude it
+- `superseded` notes: set `Weight = 0` to make them decay-immune (already at floor) — prevents `memctl decay` from further modifying them
+- Log resolution: `Console.Error.WriteLine($"[distill] contradiction resolved: {resolution} — {rationale}")`
 
 ## Acceptance criteria
 
 | ID | Criterion | Verify |
 |----|-----------|--------|
-| AC-1 | `--resolve-contradictions` flag hoạt động, không break default distill | `memctl distill` (không flag) → unchanged behavior |
-| AC-2 | LLM được gọi với candidate notes khi flag enabled | mock LLM → verify ContradictionCheckAsync called |
-| AC-3 | `keep_new`: existing note bị archive (`archived: true`, tag `superseded`) | setup contradiction → distill → old note archived |
-| AC-4 | `keep_existing`: extracted note bị skip, không write file mới | setup contradiction → distill → new note NOT written |
-| AC-5 | `merge`: merged content được write, existing archived | setup contradiction với merge resolution → verify merged file + old archived |
-| AC-6 | No contradiction: both notes written normally | non-contradicting notes → both present |
-| AC-7 | Resolution logged khi `--verbose` | verbose output có "Resolved contradiction: keep_new/keep_existing/merge" |
+| AC-1 | Default `memctl distill` (no flag) behavior unchanged | run without flag → no contradiction checks, no LLM calls for CheckContradiction |
+| AC-2 | `--resolve-contradictions`: LLM called per extracted note with same-type candidates | mock → CheckContradictionAsync call count = number of extracted notes with candidates |
+| AC-3 | `keep_new` (KeepNew): existing note archived in file (archived:true, tag superseded) AND in index | contradiction → old note: file has archived:true, index.GetAll(false) excludes it |
+| AC-4 | `keep_existing` (KeepExisting): extracted note not written, no new file | contradiction KeepExisting → file count unchanged |
+| AC-5 | `merge` (Merge): merged content written as new file, existing archived | contradiction Merge → new file with merged content + old archived |
+| AC-6 | No contradiction (Contradicts=false): extracted note written normally | no contradiction → new note present |
+| AC-7 | `superseded` archived notes have Weight=0 in index | post-archive → index.GetById shows Weight=0 |
+| AC-8 | CheckContradictionAsync throws → distill continues, note extracted as normal | mock throw → distill succeeds, note written |
+| AC-9 | Same-type filter: decision only checked against decisions, not lessons/patterns | decision extraction → candidates from decisions/ only |
 
 ## Files
 
-- `src/memctl/CoreAbstractions/Entities/ContradictionResult.cs` (new)
-- `src/memctl/CoreAbstractions/Ports/ILlmClient.cs` (thêm CheckContradictionAsync)
-- `src/memctl/Implementations/Llm/OpenAiLlmClient.cs` (implement)
-- `src/memctl/Operators/DistillOperator.cs` (wire contradiction check)
-- `src/memctl/Bootstrap/Program.cs` (thêm --resolve-contradictions flag)
+- `src/memctl/CoreAbstractions/Entities/ContradictionResult.cs` (new — enum + record)
+- `src/memctl/CoreAbstractions/Ports/ILlmClient.cs` (add CheckContradictionAsync)
+- `src/memctl/Implementations/Llm/OpenAiLlmClient.cs` (implement CheckContradictionAsync)
+- `src/memctl/Operators/DistillOperator.cs` (wire --resolve-contradictions)
+- `src/memctl/Bootstrap/Program.cs` (add --resolve-contradictions flag)
+- `tests/memctl.Tests/Operators/DistillOperatorTests.cs` (update CountingLlmClient + FixedResultLlmClient stubs)
 - `tests/memctl.Tests/Operators/DistillContradictionTests.cs` (new)
 
 ## Dependency
 
-Sau #43 (hoặc independent — không conflict).
+Independent of #43 — no conflict.
 
 ## Effort
 
-~3h: ContradictionResult + ILlmClient (0.5h) + OpenAiLlmClient impl (0.75h) + DistillOperator wire (0.75h) + tests (1h)
+~3.5h: ContradictionResult enum+record (0.25h) + ILlmClient + stubs update (0.5h) + OpenAiLlmClient (0.75h) + DistillOperator wire (0.75h) + tests (1.25h)
