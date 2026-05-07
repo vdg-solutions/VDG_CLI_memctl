@@ -9,4 +9,5 @@ public interface IVaultReader
     void InitVaultStructure(string vaultPath);
     void WriteNote(Note note, string vaultPath, string? fileName = null);
     void UpdateFrontmatter(string absolutePath, string[] tags, string[] links);
+    void MarkAsDistilled(string absolutePath, DateTime distilledAt, string[] distilledNoteRelPaths);
 }
