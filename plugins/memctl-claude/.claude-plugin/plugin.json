@@ -1,6 +1,6 @@
 {
   "name": "memctl",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "Zero-config persistent memory for Claude Code — auto-capture, auto-inject, vault-backed",
   "author": {
     "name": "vdg-solutions",

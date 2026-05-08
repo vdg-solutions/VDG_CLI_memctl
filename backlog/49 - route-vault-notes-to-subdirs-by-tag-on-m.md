@@ -2,7 +2,7 @@
 id: 49
 type: task
 title: Route vault notes to subdirs by tag on memctl add
-status: In Review
+status: Done
 priority: normal
 created: 2026-05-08
 updated: 2026-05-08
@@ -132,3 +132,5 @@ One linear scan of `TagSubdirMap` (≤5 entries) per `add` call. Negligible.
 **2026-05-08 08:56 user:** Phase 3 complete: Build — AddOperator routing + 13 unit tests, 103/103 pass
 
 **2026-05-08 08:57 user:** Phase 4 complete: QC — 103/103 tests, 4/4 smoke scenarios. Proceeding to review.
+
+**2026-05-08 08:58 user:** Phase 6: Merged to main. Pipeline complete.
