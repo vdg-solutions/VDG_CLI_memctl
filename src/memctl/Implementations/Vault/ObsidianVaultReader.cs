@@ -61,8 +61,8 @@ public sealed class ObsidianVaultReader : IVaultReader
         Directory.CreateDirectory(Path.Combine(vaultRoot, ".obsidian", "memctl"));
 
         // 7 semantic top-level dirs (writer ownership: tasks=/sdlc, patterns=/retro,
-        // lessons=/qc-dream, decisions=/design, chats=Stop hook, attachments=tools, claude-memory=/qc-dream)
-        foreach (var d in new[] { "tasks", "patterns", "lessons", "decisions", "chats", "attachments", "claude-memory", "events" })
+        // lessons=/qc-dream, decisions=/design, chats=Stop hook, attachments=tools, ai-memory=/qc-dream)
+        foreach (var d in new[] { "tasks", "patterns", "lessons", "decisions", "chats", "attachments", "ai-memory", "events" })
             Directory.CreateDirectory(Path.Combine(vaultRoot, d));
 
         WriteIfAbsent(Path.Combine(vaultRoot, ".obsidian", "app.json"),        "{}");
@@ -74,11 +74,11 @@ public sealed class ObsidianVaultReader : IVaultReader
         WriteIfAbsent(Path.Combine(vaultRoot, ".obsidian", "daily-notes.json"),
             """{"folder":"chats","format":"YYYY-MM-DD"}""");
 
-        WriteIfAbsent(Path.Combine(vaultRoot, "claude-memory", "MEMORY.md"),
+        WriteIfAbsent(Path.Combine(vaultRoot, "ai-memory", "MEMORY.md"),
             "---\ntype: user\n---\n\n# Memory index\n\n");
 
         WriteIfAbsent(Path.Combine(vaultRoot, "README.md"),
-            "# memctl vault\n\nObsidian: open this folder as vault. Memctl handles indexing automatically.\n\n## Subdirs\n\n- `tasks/` — /sdlc per-phase artifacts\n- `patterns/` — /retro error patterns\n- `lessons/` — /qc-dream wisdom\n- `decisions/` — /design ADRs\n- `chats/` — Stop hook daily rollups\n- `attachments/` — images/binaries\n- `claude-memory/MEMORY.md` — top-level index\n");
+            "# memctl vault\n\nObsidian: open this folder as vault. Memctl handles indexing automatically.\n\n## Subdirs\n\n- `tasks/` — /sdlc per-phase artifacts\n- `patterns/` — /retro error patterns\n- `lessons/` — /qc-dream wisdom\n- `decisions/` — /design ADRs\n- `chats/` — Stop hook daily rollups\n- `attachments/` — images/binaries\n- `ai-memory/MEMORY.md` — top-level index\n");
     }
 
     private static void WriteIfAbsent(string path, string content)
