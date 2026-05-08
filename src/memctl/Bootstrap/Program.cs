@@ -859,6 +859,7 @@ if (args.Length > 0 && args[0] == "add")
     {
         "--content", "--title", "--tags", "--file",
         "--vault", "--limit", "--llm-url", "--llm-model", "--llm-key", "--model-dir",
+        "--help", "-h", "-?",
     };
     foreach (var arg in args.Skip(1))
     {
