@@ -93,17 +93,18 @@ memctl search "<task>"      # find relevant prior decisions
 
 ## Tag schema
 
-| Tag | Use |
-|-----|-----|
-| `session,task-{id}` | SDLC pipeline state (short-term) |
-| `qc-feedback,task-{id}` | QC retry feedback (short-term) |
-| `qc-error,project-{n}` | Error patterns → promote to rule at hit_count ≥ 3 |
-| `qc-rule,project-{n}` | Active project rules → promote to golden at strength > 5 |
-| `golden-rule` | Cross-project universal (long-term) |
-| `anti-pattern` | Recurring mistakes (long-term) |
-| `insight` | Meta-learning (long-term) |
-| `dream-log` | Consolidation history |
-| `user-preference` | Stack, style, identity |
+| Tag | Use | Subdir |
+|-----|-----|--------|
+| `session,task-{id}` | SDLC pipeline state (short-term) | `chats/` |
+| `qc-feedback,task-{id}` | QC retry feedback (short-term) | `patterns/` |
+| `qc-error,project-{n}` | Error patterns → promote to rule at hit_count ≥ 3 | `patterns/` |
+| `qc-rule,project-{n}` | Active project rules → promote to golden at strength > 5 | `patterns/` |
+| `golden-rule` | Cross-project universal (long-term) | `lessons/` |
+| `anti-pattern` | Recurring mistakes (long-term) | `lessons/` |
+| `insight` | Meta-learning (long-term) | `lessons/` |
+| `dream-log` | Consolidation history | `lessons/` |
+| `decisions,adr` | Design ADRs | `decisions/` |
+| `user-preference` | Stack, style, identity | vault root |
 
 ---
 

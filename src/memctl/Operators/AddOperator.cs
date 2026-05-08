@@ -4,8 +4,16 @@ using Memctl.Implementations.Embedding;
 
 namespace Memctl.Operators;
 
-public sealed class AddOperator(IVaultReader vault, INoteIndex index, GemmaEmbeddingEngine embedding)
+public sealed class AddOperator(IVaultReader vault, INoteIndex index, GemmaEmbeddingEngine? embedding)
 {
+    private static readonly (string[] Tags, string Subdir)[] TagSubdirMap =
+    [
+        (["golden-rule", "anti-pattern", "insight", "dream-log"], "lessons"),
+        (["qc-rule", "qc-error", "qc-feedback"],                  "patterns"),
+        (["decisions", "adr"],                                     "decisions"),
+        (["session"],                                              "chats"),
+    ];
+
     public async Task<MemctlOutcome> ExecuteAsync(
         string vaultPath,
         string content,
@@ -33,10 +41,16 @@ public sealed class AddOperator(IVaultReader vault, INoteIndex index, GemmaEmbed
         var resolvedTags  = tags ?? enriched.Tags;
         var resolvedLinks = enriched.Links;
 
+        var subdir   = fileName is null ? ResolveSubdir(resolvedTags) : null;
+        var filePath = fileName
+            ?? (subdir is not null
+                ? subdir + "/" + SanitizeFileName(resolvedTitle) + ".md"
+                : SanitizeFileName(resolvedTitle) + ".md");
+
         var note = new Note
         {
             Id       = Guid.NewGuid().ToString("N")[..16],
-            FilePath = fileName ?? (SanitizeFileName(resolvedTitle) + ".md"),
+            FilePath = filePath,
             Title    = resolvedTitle,
             Content  = content,
             Tags     = resolvedTags,
@@ -45,13 +59,22 @@ public sealed class AddOperator(IVaultReader vault, INoteIndex index, GemmaEmbed
             Modified = DateTime.UtcNow,
         };
 
-        var emb      = embedding.Embed($"{note.Title}\n{note.Content}");
+        float[]? emb = embedding?.Embed($"{note.Title}\n{note.Content}");
         var withEmbed = note with { Embedding = emb };
 
-        vault.WriteNote(withEmbed, vaultPath, fileName);
+        vault.WriteNote(withEmbed, vaultPath, filePath);
         index.Upsert(withEmbed);
 
         return MemctlOutcome.Ok("add", $"Added note: {note.Title}", withEmbed);
+    }
+
+    private static string? ResolveSubdir(string[]? tags)
+    {
+        if (tags is null or { Length: 0 }) return null;
+        foreach (var (routeTags, subdir) in TagSubdirMap)
+            if (routeTags.Any(rt => tags.Any(t => string.Equals(t, rt, StringComparison.OrdinalIgnoreCase))))
+                return subdir;
+        return null;
     }
 
     private static string ExtractTitle(string content)

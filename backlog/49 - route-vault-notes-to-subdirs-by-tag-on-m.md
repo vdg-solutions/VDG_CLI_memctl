@@ -2,7 +2,7 @@
 id: 49
 type: task
 title: Route vault notes to subdirs by tag on memctl add
-status: Todo
+status: In Progress
 priority: normal
 created: 2026-05-08
 updated: 2026-05-08
@@ -122,3 +122,9 @@ Routing is skipped entirely when `--file` is present.
 ## Performance
 
 One linear scan of `TagSubdirMap` (≤5 entries) per `add` call. Negligible.
+
+## Comments
+
+**2026-05-08 08:49 user:** Phase 0: Branch feature/49-route-vault-notes-subdirs-by-tag created. Spec already exists at backlog/49.
+
+**2026-05-08 08:51 user:** Phase 2 complete: Design at docs/designs/49-design.md
