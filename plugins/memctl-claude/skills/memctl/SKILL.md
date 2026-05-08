@@ -57,7 +57,7 @@ memctl search "<task>"      # find relevant prior decisions
 
 | Command | Description |
 |---------|-------------|
-| `memctl add "<text>"` | Add note. `--llm-*` → auto-tags + wikilinks |
+| `memctl add "<text>"` | Add note. `--content <text>` accepted as alias for positional arg. `--llm-*` → auto-tags + wikilinks |
 | `memctl append <id> "<content>"` | Append to note, re-index |
 | `memctl capture --role <r> --text <t>` | Direct-mode conversation capture |
 | `memctl distill` | L1 → L2: LLM extracts long-term memory from conversations |

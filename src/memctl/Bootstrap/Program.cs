@@ -121,12 +121,14 @@ ingestCmd.SetHandler(async ctx =>
 root.AddCommand(ingestCmd);
 
 // --- add ---
-var addTextArg   = new Argument<string>("text", "Note content");
-var addTitleOpt  = new Option<string?>("--title", "Note title (auto-extracted if omitted)");
-var addTagsOpt   = new Option<string?>("--tags",  "Comma-separated tags");
-var addFileOpt   = new Option<string?>("--file",  "Output filename (e.g. notes/crypto.md)");
+var addTextArg    = new Argument<string?>("text", () => null, "Note content (or use --content)");
+var addContentOpt = new Option<string?>("--content", "Note content (alias for positional <text>)");
+var addTitleOpt   = new Option<string?>("--title", "Note title (auto-extracted if omitted)");
+var addTagsOpt    = new Option<string?>("--tags",  "Comma-separated tags");
+var addFileOpt    = new Option<string?>("--file",  "Output filename (e.g. notes/crypto.md)");
 var addCmd = new Command("add", "Add a new note to vault");
 addCmd.AddArgument(addTextArg);
+addCmd.AddOption(addContentOpt);
 addCmd.AddOption(addTitleOpt);
 addCmd.AddOption(addTagsOpt);
 addCmd.AddOption(addFileOpt);
@@ -134,10 +136,18 @@ addCmd.SetHandler(async ctx =>
 {
     var g = G(ctx);
     if (RequireVault(g, ctx) is not { } vault) return;
-    var pr  = ctx.ParseResult;
+    var pr   = ctx.ParseResult;
+    var text = pr.GetValueForOption(addContentOpt) ?? pr.GetValueForArgument(addTextArg);
+    if (string.IsNullOrWhiteSpace(text))
+    {
+        Console.Error.WriteLine(
+            "Error: note content is required. Usage: memctl add <text> [--content <text>] [--title <title>] [--tags <tags>] [--file <file>]");
+        ctx.ExitCode = 1;
+        return;
+    }
     var req = new AddNoteRequest
     {
-        Text  = pr.GetValueForArgument(addTextArg),
+        Text  = text,
         Title = pr.GetValueForOption(addTitleOpt),
         Tags  = pr.GetValueForOption(addTagsOpt)?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
         File  = pr.GetValueForOption(addFileOpt),
@@ -841,6 +851,27 @@ hookStatusCmd.SetHandler(ctx =>
     ResultPrinter.Print(new HookStatusOperator().Execute(vault));
 });
 root.AddCommand(hookStatusCmd);
+
+// Friendly unknown-flag error for 'add' command (LLM-first: one-shot diagnosis)
+if (args.Length > 0 && args[0] == "add")
+{
+    var knownAddFlags = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "--content", "--title", "--tags", "--file",
+        "--vault", "--limit", "--llm-url", "--llm-model", "--llm-key", "--model-dir",
+    };
+    foreach (var arg in args.Skip(1))
+    {
+        if (!arg.StartsWith("--")) continue;
+        var flag = arg.Contains('=') ? arg[..arg.IndexOf('=')] : arg;
+        if (!knownAddFlags.Contains(flag))
+        {
+            Console.Error.WriteLine(
+                $"Unknown option '{flag}'. Usage: memctl add <text> [--content <text>] [--title <title>] [--tags <tags>] [--file <file>]");
+            return 1;
+        }
+    }
+}
 
 return await root.InvokeAsync(args);
 
