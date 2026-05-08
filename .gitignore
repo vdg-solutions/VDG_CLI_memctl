@@ -363,4 +363,4 @@ tools/
 .claude/scheduled_tasks.lock
 .archived-v1-vault/
 
-.memctl-vault/
+.memctl-vault/.obsidian/memctl/

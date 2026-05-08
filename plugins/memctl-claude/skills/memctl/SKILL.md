@@ -127,6 +127,16 @@ memctl search "<task>"      # find relevant prior decisions
 Auto-detect: walks up from cwd for `.memctl/.obsidian/`. Per-project wins over `MEMCTL_SHARED_VAULT`.
 Shared vault: `export MEMCTL_SHARED_VAULT=$HOME/memctl-personal/.memctl`
 
+**Git — what to ignore:** Only ignore the runtime index, NOT the vault notes:
+```
+# .gitignore — correct
+.memctl-vault/.obsidian/memctl/   ← index.db + embeddings (binary, regenerable)
+
+# WRONG — never do this:
+.memctl-vault/                    ← ignores all notes, memory is lost
+```
+Vault `.md` files are project memory and MUST be committed. After a session: `git add .memctl-vault/ && git commit`.
+
 ---
 
 ## Hook Protocol v1
