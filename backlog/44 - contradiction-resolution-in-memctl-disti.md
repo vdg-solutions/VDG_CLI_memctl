@@ -2,7 +2,7 @@
 id: 44
 type: task
 title: Contradiction resolution in memctl distill
-status: In Review
+status: Done
 priority: low
 tags:
 - memory,distill,qc
@@ -110,3 +110,5 @@ Independent of #43 — no conflict.
 **2026-05-07 23:47 user:** Phase 2 complete: Design created at docs/designs/44-design.md
 
 **2026-05-07 23:57 user:** Phase 3 complete: Build — 90 tests pass (10 new). Moving to QC.
+
+**2026-05-07 23:58 user:** Pipeline complete. Merged to main.
