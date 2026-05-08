@@ -49,6 +49,7 @@ public sealed class OrganizeOperator(IVaultReader vault, INoteIndex index, ILlmC
             }
         }
 
+        EventLog.Record(vaultPath, "operator_run", "info", "organize", $"Organized {updated} notes");
         return MemctlOutcome.Ok("organize", $"Organized {updated} notes",
             new OrganizeReport(updated, errors, vaultPath));
     }

@@ -89,7 +89,8 @@ public sealed class SqliteNoteIndex : INoteIndex
             SELECT n.*, bm25(notes_fts) AS rank
             FROM notes_fts f
             JOIN notes n ON n.rowid = f.rowid
-            WHERE notes_fts MATCH @q{folderClause}
+            WHERE notes_fts MATCH @q
+              AND n.archived = 0{folderClause}
             ORDER BY rank
             LIMIT @limit",
             ("@q", EscapeFts(query)),
@@ -114,7 +115,7 @@ public sealed class SqliteNoteIndex : INoteIndex
     public IReadOnlyList<SearchHit> SearchSemantic(float[] queryEmbedding, int limit, IReadOnlyList<string>? scopeIds = null, string? folderPrefix = null)
     {
         var prefix = NormalizePrefix(folderPrefix);
-        var conditions = new List<string> { "embedding IS NOT NULL" };
+        var conditions = new List<string> { "embedding IS NOT NULL", "archived = 0" };
         if (prefix is not null) conditions.Add("file_path LIKE @prefix");
         if (scopeIds is { Count: > 0 }) conditions.Add($"id IN ({string.Join(',', scopeIds.Select((_, i) => $"@id{i}"))})");
 

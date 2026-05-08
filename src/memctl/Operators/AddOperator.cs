@@ -65,6 +65,7 @@ public sealed class AddOperator(IVaultReader vault, INoteIndex index, GemmaEmbed
         vault.WriteNote(withEmbed, vaultPath, filePath);
         index.Upsert(withEmbed);
 
+        EventLog.Record(vaultPath, "operator_run", "info", "add", $"Added {note.Title} → {filePath}");
         return MemctlOutcome.Ok("add", $"Added note: {note.Title}", withEmbed);
     }
 

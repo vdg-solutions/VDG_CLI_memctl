@@ -23,6 +23,7 @@ public sealed class DeleteOperator(IVaultReader vaultReader, INoteIndex index)
             File.Delete(absPath);
 
         index.Delete(noteId);
+        EventLog.Record(vaultPath, "operator_run", "info", "delete", $"Deleted {note.FilePath}");
         return MemctlOutcome.Ok("delete", $"Deleted: {note.FilePath}", note);
     }
 }

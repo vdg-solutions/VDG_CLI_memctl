@@ -96,6 +96,8 @@ public sealed class DistillOperator(IVaultReader vaultReader, INoteIndex index, 
         var msg = dryRun
             ? $"dry-run: {pending.Count} conversations, {totalExtracted} extractions"
             : $"{pending.Count} conversations distilled, {totalExtracted} notes extracted";
+        if (!dryRun && pending.Count > 0)
+            EventLog.Record(vaultPath, "operator_run", "info", "distill", msg);
         return MemctlOutcome.Ok("distill", msg);
     }
 
