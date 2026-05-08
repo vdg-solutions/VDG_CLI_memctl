@@ -12,7 +12,7 @@ End-to-end SOP for shipping memctl releases. Future bots: read this before touch
 | `vdg-solutions/memctl-releases` | public | binary release host (GitHub Releases) + install scripts |
 | `vdg-solutions/claude-plugins` | public | Claude Code marketplace manifest |
 
-Push tag `v*` to private repo → workflow `.github/workflows/release.yml` runs → builds 3 native AOT binaries (win-x64, linux-x64, osx-arm64) + nupkg → uploads to `memctl-releases/releases/<tag>` via `RELEASE_REPO_PAT` secret.
+Push tag `v*` to private repo → workflow `.github/workflows/release.yml` runs → builds 3 native AOT binaries (win-x64, linux-x64, osx-arm64) → uploads to `memctl-releases/releases/<tag>` via `RELEASE_REPO_PAT` secret. No nupkg — AOT binaries only.
 
 ---
 
@@ -62,14 +62,45 @@ gh run watch --repo vdg-solutions/VDG_CLI_memctl
 gh release view "v$NEW_VER" --repo vdg-solutions/memctl-releases
 ```
 
-Expected: 4 assets within 10-15 min.
+Expected: 3 assets within 10-15 min.
 
 | Asset | Size | Platform |
 |-------|------|----------|
-| `memctl-win-x64-<ver>.zip` | ~5 MB | Windows |
-| `memctl-linux-x64-<ver>.tar.gz` | ~5.5 MB | Linux |
-| `memctl-osx-arm64-<ver>.tar.gz` | ~5 MB | macOS Apple Silicon |
-| `memctl.<ver>.nupkg` | ~140 MB | dotnet tool (multi-rid) |
+| `memctl-win-x64-<ver>.zip` | ~5 MB | Windows (binary + 3 DLLs) |
+| `memctl-linux-x64-<ver>.tar.gz` | ~5.5 MB | Linux (binary + .so libs) |
+| `memctl-osx-arm64-<ver>.tar.gz` | ~5 MB | macOS Apple Silicon (binary + .dylib) |
+
+Each archive contains: `memctl`/`memctl.exe` + native libs (`onnxruntime`, `e_sqlite3`, `onnxruntime_providers_shared`). No `.lib` linker files.
+
+---
+
+## Installing memctl (end-user one-liners)
+
+### Linux / macOS
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/vdg-solutions/memctl-releases/main/install.sh | bash
+```
+
+Optional: override install dir with `--dir`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/vdg-solutions/memctl-releases/main/install.sh | bash -s -- --dir /usr/local/bin
+```
+
+### Windows (PowerShell)
+
+```powershell
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/vdg-solutions/memctl-releases/main/Install.ps1" -OutFile "$env:TEMP\memctl-install.ps1"; & "$env:TEMP\memctl-install.ps1"
+```
+
+Optional: override install dir with `-Dir`:
+
+```powershell
+& "$env:TEMP\memctl-install.ps1" -Dir "C:\tools"
+```
+
+`irm | iex` not used — Windows PowerShell pipe semantics differ from bash; explicit download is safer.
 
 ---
 
@@ -129,9 +160,8 @@ git push origin "v$NEW_VER"
 verify-versions
     ↓
 build (matrix 3-platform AOT)
-pack-tool (dotnet pack nupkg)
     ↓
-release (gh release create on memctl-releases)
+release (gh release create on memctl-releases + sync install scripts)
     ↓
 sync-marketplace (skipped on pre-release tags)
 ```
