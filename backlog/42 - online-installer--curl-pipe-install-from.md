@@ -2,7 +2,7 @@
 id: 42
 type: task
 title: Online installer — curl-pipe install from GitHub Releases
-status: Todo
+status: In Progress
 priority: normal
 tags:
 - install,distribution
