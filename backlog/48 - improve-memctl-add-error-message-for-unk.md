@@ -2,7 +2,7 @@
 id: 48
 type: task
 title: Improve memctl add error message for unknown flags
-status: Todo
+status: Done
 priority: normal
 created: 2026-05-08
 updated: 2026-05-08
@@ -44,3 +44,11 @@ Argument parsing adds one extra `Option<string>` registration — negligible, no
 ## Comments
 
 **2026-05-08 06:52 user:** LLM-first UX fix: when an unknown flag is passed (e.g. --content), current error prints 'Unrecognized command or argument <entire content string>' — LLM cannot tell whether the flag name or the value is wrong. Fix: detect unknown options before argument parsing and emit 'Unknown option --content. Usage: memctl add <text> --title ... --tags ...' Also consider adding --content as an alias for the positional <text> argument to prevent this class of error entirely.
+
+**2026-05-08 07:12 user:** Phase 1 complete: Spec created at docs/specs/48-spec.md
+
+**2026-05-08 07:12 user:** Phase 2 complete: Design at docs/designs/48-design.md
+
+**2026-05-08 07:16 user:** Phase 3 complete: --content alias + pre-parse error. 90/90 tests pass.
+
+**2026-05-08 07:17 user:** Pipeline complete. Merged to main.

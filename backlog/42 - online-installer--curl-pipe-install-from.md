@@ -2,7 +2,7 @@
 id: 42
 type: task
 title: Online installer — curl-pipe install from GitHub Releases
-status: In Progress
+status: Done
 priority: normal
 tags:
 - install,distribution
@@ -181,3 +181,5 @@ README nên document cả hai. Option 1 là primary.
 **2026-05-07 11:45 user:** PAUSED — cần quyết định: (1) AOT only hay giữ nupkg trong public release? (2) install scripts authored ở public repo (memctl-releases) hay sync từ private? Implement sau khi có quyết định.
 
 **2026-05-08 06:52 user:** Decision: AOT-only. No nupkg in release. Release pipeline ships only native AOT binaries (win-x64, linux-x64, osx-arm64). Install script downloads binary directly from GitHub Releases. Remove any nupkg publish steps from CI.
+
+**2026-05-08 07:53 user:** Pipeline complete. feat(42) merged to feature branch. All 12 ACs verified. Pending merge to main.
