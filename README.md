@@ -4,63 +4,61 @@ Obsidian-compatible personal memory vault CLI with hybrid BM25 + semantic search
 
 ## Installation
 
-### Option A — dotnet global tool (requires .NET 10 SDK)
-
-```bash
-# build the package
-bash build-tool.sh
-
-# install globally
-dotnet tool install -g memctl --add-source ./nupkg
-
-# upgrade
-dotnet tool update -g memctl --add-source ./nupkg
-
-# uninstall
-dotnet tool uninstall -g memctl
-```
-
-### Option B — portable binary (no .NET SDK required)
-
-```bash
-# build portable binaries for all platforms
-bash build-portable.sh
-```
+### Online — from GitHub Releases (no .NET SDK, no build)
 
 **Linux / macOS:**
 ```bash
-bash install.sh
+curl -fsSL https://raw.githubusercontent.com/vdg-solutions/memctl-releases/main/install.sh | bash
 ```
 
 **Windows (PowerShell):**
 ```powershell
-.\install.ps1
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/vdg-solutions/memctl-releases/main/Install.ps1" -OutFile "$env:TEMP\memctl-install.ps1"; & "$env:TEMP\memctl-install.ps1"
 ```
 
-> If blocked by execution policy: `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser`
+Both scripts detect platform, fetch the latest release from GitHub Releases, verify the download, and add to PATH.
 
-### Option C — Native AOT (anti-reverse-engineer + fast startup)
-
-Native AOT compiles to machine code, strips IL, ~10x faster cold start (~150ms vs 500ms JIT).
-
-**Prereq (one-time per host):**
-
-| OS | Install |
-|----|---------|
-| Windows | VS Build Tools 2022/2026 + "Desktop development with C++" workload (MSVC + Win11 SDK ~4GB). Also requires `vswhere.exe` at `C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe` (download from https://github.com/microsoft/vswhere/releases). Add Installer dir to PATH so `vcvars` internal calls work. |
-| Linux  | `apt install -y clang libc6-dev` |
-| macOS  | `xcode-select --install` |
-
-**Build:**
+### From source (dev / CI)
 
 ```bash
-# Windows (PowerShell — set PATH so vswhere resolves):
-$env:PATH = "C:\Program Files (x86)\Microsoft Visual Studio\Installer;$env:PATH"
+# Native AOT (no .NET SDK on target required)
 dotnet publish src/memctl/memctl.csproj -c Release -r win-x64 -p:PublishAot=true -o dist/aot/win-x64
-
-# Linux / macOS:
-dotnet publish src/memctl/memctl.csproj -c Release -r linux-x64  -p:PublishAot=true -o dist/aot/linux-x64
-dotnet publish src/memctl/memctl.csproj -c Release -r osx-arm64  -p:PublishAot=true -o dist/aot/osx-arm64
+dotnet publish src/memctl/memctl.csproj -c Release -r linux-x64 -p:PublishAot=true -o dist/aot/linux-x64
+dotnet publish src/memctl/memctl.csproj -c Release -r osx-arm64 -p:PublishAot=true -o dist/aot/osx-arm64
 ```
 
-Output: ~13MB single binary (vs ~75MB JIT single-file). 0 IL2026/IL3050 warnings expected.
+> AOT prereqs: Windows — VS Build Tools 2022+ with "Desktop development with C++"; Linux — `clang libc6-dev`; macOS — `xcode-select --install`.
+
+## Integrating with other AI tools
+
+memctl is AI-tool-agnostic. Any tool that supports [MCP (Model Context Protocol)](https://modelcontextprotocol.io) can use it directly — no plugin required.
+
+### MCP mode (recommended — zero maintenance)
+
+Start the MCP server:
+
+```bash
+memctl mcp              # auto-detects vault from cwd
+memctl mcp --vault /path/to/.memctl  # explicit vault
+```
+
+Wire it into your tool's MCP config. Example for **Cursor** (`~/.cursor/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "memctl": {
+      "command": "memctl",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+Same config format works for **Cline**, **VS Code MCP extension**, **Windsurf**, and any MCP-compatible host.
+
+MCP tools exposed: `search`, `search_semantic`, `search_tags`, `search_date`, `search_links`, `get`, `list`, `create`, `update`, `append`, `delete`, `set_weight`, `get_identity`.
+
+### Hook plugins (fallback — for tools without MCP support)
+
+For tools that don't support MCP, a thin hook plugin wires `memctl capture` and `memctl context-inject` into the tool's event hooks. See `plugins/memctl-claude/` as the canonical example and `docs/plugin-guide.md` for authoring instructions.

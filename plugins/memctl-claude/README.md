@@ -160,6 +160,12 @@ export MEMCTL_ALLOW_DEBUG=1           # allow debugger attach (memctl --version 
 
 **Capture is slow:** `memctl capture` filters short turns + skips tool-call-only turns. If still slow, check `~/.claude/logs/` for hook output.
 
+## Building a plugin for another AI tool
+
+This plugin is the canonical reference for creating hook-based memctl integrations. For tools that support MCP, use `memctl mcp` instead — no plugin needed.
+
+For hook-based plugin authoring: see [`docs/plugin-guide.md`](../../docs/plugin-guide.md) in the source repo.
+
 ## License
 
 MIT
