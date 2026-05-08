@@ -187,6 +187,8 @@ Error: `"success": false, "data": null, "error": {"code": "...", "message": "...
 
 ## MCP mode
 
+MCP is the primary integration path for any AI tool (Cursor, Cline, VS Code MCP extension, Windsurf, etc.) — no plugin required, zero maintenance.
+
 ```bash
 memctl mcp              # auto-detects vault from cwd
 memctl mcp --vault <p>  # explicit override
@@ -195,6 +197,8 @@ memctl mcp --vault <p>  # explicit override
 MCP tools: search, search_semantic, search_tags, search_date, search_links, get, list, create, update, append, delete, set_weight, get_identity.
 
 Claude Code config (`~/.claude/claude_desktop_config.json`): `{"mcpServers": {"memctl": {"command": "memctl", "args": ["mcp"]}}}`.
+
+Other tools: same JSON structure — add to Cursor `~/.cursor/mcp.json`, Cline settings, or any MCP host config.
 
 ---
 
