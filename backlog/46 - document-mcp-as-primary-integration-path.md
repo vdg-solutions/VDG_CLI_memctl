@@ -2,7 +2,7 @@
 id: 46
 type: task
 title: Document MCP as primary integration path for non-Claude tools
-status: In Progress
+status: Done
 priority: low
 created: 2026-05-08
 updated: 2026-05-08

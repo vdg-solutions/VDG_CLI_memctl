@@ -2,7 +2,7 @@
 id: 47
 type: task
 title: Document plugins/memctl-{tool}/ pattern for hook-based integrations
-status: In Progress
+status: Done
 priority: low
 created: 2026-05-08
 updated: 2026-05-08

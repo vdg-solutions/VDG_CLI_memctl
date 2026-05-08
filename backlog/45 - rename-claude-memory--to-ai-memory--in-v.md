@@ -2,7 +2,7 @@
 id: 45
 type: task
 title: Rename claude-memory/ to ai-memory/ in vault init
-status: Todo
+status: Done
 priority: low
 created: 2026-05-08
 updated: 2026-05-08
