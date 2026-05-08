@@ -84,4 +84,17 @@ if ($userPath -notlike "*$Dir*") {
     Write-Host "Added $Dir to user PATH (restart shell to take effect)"
 }
 
+# Sync memctl skill doc to ~/.claude/skills/memctl/SKILL.md
+$skillDir = Join-Path $env:USERPROFILE ".claude\skills\memctl"
+if (Test-Path $skillDir) {
+    $skillUrl = "https://raw.githubusercontent.com/$Repo/main/SKILL.md"
+    $skillDest = Join-Path $skillDir "SKILL.md"
+    try {
+        Invoke-WebRequest -Uri $skillUrl -OutFile $skillDest -UseBasicParsing -ErrorAction Stop
+        Write-Host "Skill doc synced to $skillDest"
+    } catch {
+        Write-Warning "Skill doc sync failed (non-fatal): $_"
+    }
+}
+
 Write-Host "memctl $tag installed to $Dir"

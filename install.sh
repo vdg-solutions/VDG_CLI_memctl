@@ -86,6 +86,17 @@ main() {
 
     rm -rf "$tmpdir"
 
+    # Sync memctl skill doc to ~/.claude/skills/memctl/SKILL.md
+    local skill_dir="$HOME/.claude/skills/memctl"
+    if [ -d "$skill_dir" ]; then
+        local skill_url="https://raw.githubusercontent.com/$REPO/main/SKILL.md"
+        if curl -fsSL "$skill_url" -o "$skill_dir/SKILL.md" 2>/dev/null; then
+            echo "Skill doc synced to $skill_dir/SKILL.md"
+        else
+            echo "NOTE: skill doc sync failed (non-fatal)" >&2
+        fi
+    fi
+
     echo "memctl $tag installed to $install_dir"
 
     case ":$PATH:" in
