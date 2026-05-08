@@ -35,7 +35,7 @@ public class InitV2Tests : IDisposable
         Assert.True(Directory.Exists(Path.Combine(anchor, ".memctl", ".obsidian", "memctl")));
 
         // 7 semantic top-level dirs
-        foreach (var d in new[] { "tasks", "patterns", "lessons", "decisions", "chats", "attachments", "claude-memory" })
+        foreach (var d in new[] { "tasks", "patterns", "lessons", "decisions", "chats", "attachments", "ai-memory" })
             Assert.True(Directory.Exists(Path.Combine(anchor, ".memctl", d)), $"Missing {d}/");
 
         // Obsidian config files
@@ -45,9 +45,9 @@ public class InitV2Tests : IDisposable
         // No nested .memctl/.memctl/
         Assert.False(Directory.Exists(Path.Combine(anchor, ".memctl", ".memctl")));
 
-        // README + claude-memory/MEMORY.md
+        // README + ai-memory/MEMORY.md
         Assert.True(File.Exists(Path.Combine(anchor, ".memctl", "README.md")));
-        Assert.True(File.Exists(Path.Combine(anchor, ".memctl", "claude-memory", "MEMORY.md")));
+        Assert.True(File.Exists(Path.Combine(anchor, ".memctl", "ai-memory", "MEMORY.md")));
     }
 
     [Fact]
@@ -63,7 +63,7 @@ public class InitV2Tests : IDisposable
         Assert.False(Directory.Exists(Path.Combine(direct, ".memctl")));
 
         // Same 7 dirs at direct path
-        foreach (var d in new[] { "tasks", "patterns", "lessons", "decisions", "chats", "attachments", "claude-memory" })
+        foreach (var d in new[] { "tasks", "patterns", "lessons", "decisions", "chats", "attachments", "ai-memory" })
             Assert.True(Directory.Exists(Path.Combine(direct, d)), $"Missing {d}/");
     }
 

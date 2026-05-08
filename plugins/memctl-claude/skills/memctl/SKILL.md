@@ -121,7 +121,7 @@ memctl search "<task>"      # find relevant prior decisions
     ├── chats/             ← Stop hook conversation transcripts
     ├── events/            ← EventLog (archived: true, invisible by default)
     ├── attachments/       ← images, binaries
-    └── claude-memory/     ← MEMORY.md index
+    └── ai-memory/         ← MEMORY.md index
 ```
 
 Auto-detect: walks up from cwd for `.memctl/.obsidian/`. Per-project wins over `MEMCTL_SHARED_VAULT`.
