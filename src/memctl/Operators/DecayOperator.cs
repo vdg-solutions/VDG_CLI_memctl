@@ -73,6 +73,8 @@ public sealed class DecayOperator(IVaultReader vaultReader, INoteIndex index)
             index.SetMetadata(LastDecayDateKey, todayStr);
         }
 
+        if (!dryRun)
+            EventLog.Record(vaultPath, "operator_run", "info", "decay", $"Decayed {decayed}, archived {newlyArchived}");
         return MemctlOutcome.Ok("decay", $"Decayed {decayed} notes, archived {newlyArchived}",
             new DecayReport(decayed, newlyArchived, unchanged, alreadyArchived, null, dryRun));
     }

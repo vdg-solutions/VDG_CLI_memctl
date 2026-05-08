@@ -97,6 +97,9 @@ public sealed class MigrateTagsOperator(IVaultReader vault, INoteIndex index)
         var msg = dryRun
             ? $"Dry run: would modify {notesModified}/{notesScanned} notes"
             : $"Migrated tags in {notesModified}/{notesScanned} notes";
+        if (!dryRun)
+            EventLog.Record(vaultPath, "operator_run", "info", "migrate-tags",
+                $"Migrated {notesModified}/{notesScanned} notes, {tagsReplaced} replaced, {tagsRemoved} removed");
         return MemctlOutcome.Ok("migrate-tags", msg, report);
     }
 }

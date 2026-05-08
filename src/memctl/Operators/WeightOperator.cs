@@ -24,6 +24,7 @@ public sealed class WeightOperator(IVaultReader vaultReader, INoteIndex index)
         index.SetWeight(note.Id, clamped);
 
         var rounded = (float)Math.Round(clamped, 2);
+        EventLog.Record(vaultPath, "operator_run", "info", "weight", $"{note.FilePath} → {rounded}");
         return MemctlOutcome.Ok("weight", $"Weight set to {rounded}",
             new WeightChange(note.Id, note.FilePath, rounded));
     }
