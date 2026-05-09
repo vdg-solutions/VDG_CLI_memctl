@@ -160,8 +160,10 @@ jobs:
           mkdir -p "$REL/plugins"
           cp -r plugins/memctl-claude "$REL/plugins/"
 
-          # Sync top-level SKILL.md from docs/memctl.md (skill source of truth)
+          # docs/memctl.md is the single source of truth for the skill doc.
+          # Overwrite the plugin copy so both locations in the release repo stay identical.
           cp docs/memctl.md "$REL/SKILL.md"
+          cp docs/memctl.md "$REL/plugins/memctl-claude/skills/memctl/SKILL.md"
 
           # Sync online install scripts
           cp install.sh "$REL/install.sh"
