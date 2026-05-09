@@ -57,7 +57,7 @@ memctl search "<task>"      # find relevant prior decisions
 
 | Command | Description |
 |---------|-------------|
-| `memctl add "<text>"` | Add note. `--llm-*` → auto-tags + wikilinks |
+| `memctl add "<text>"` | Add note. `--content <text>` accepted as alias for positional arg. `--llm-*` → auto-tags + wikilinks |
 | `memctl append <id> "<content>"` | Append to note, re-index |
 | `memctl capture --role <r> --text <t>` | Direct-mode conversation capture |
 | `memctl distill` | L1 → L2: LLM extracts long-term memory from conversations |
@@ -93,17 +93,18 @@ memctl search "<task>"      # find relevant prior decisions
 
 ## Tag schema
 
-| Tag | Use |
-|-----|-----|
-| `session,task-{id}` | SDLC pipeline state (short-term) |
-| `qc-feedback,task-{id}` | QC retry feedback (short-term) |
-| `qc-error,project-{n}` | Error patterns → promote to rule at hit_count ≥ 3 |
-| `qc-rule,project-{n}` | Active project rules → promote to golden at strength > 5 |
-| `golden-rule` | Cross-project universal (long-term) |
-| `anti-pattern` | Recurring mistakes (long-term) |
-| `insight` | Meta-learning (long-term) |
-| `dream-log` | Consolidation history |
-| `user-preference` | Stack, style, identity |
+| Tag | Use | Subdir |
+|-----|-----|--------|
+| `session,task-{id}` | SDLC pipeline state (short-term) | `chats/` |
+| `qc-feedback,task-{id}` | QC retry feedback (short-term) | `patterns/` |
+| `qc-error,project-{n}` | Error patterns → promote to rule at hit_count ≥ 3 | `patterns/` |
+| `qc-rule,project-{n}` | Active project rules → promote to golden at strength > 5 | `patterns/` |
+| `golden-rule` | Cross-project universal (long-term) | `lessons/` |
+| `anti-pattern` | Recurring mistakes (long-term) | `lessons/` |
+| `insight` | Meta-learning (long-term) | `lessons/` |
+| `dream-log` | Consolidation history | `lessons/` |
+| `decisions,adr` | Design ADRs | `decisions/` |
+| `user-preference` | Stack, style, identity | vault root |
 
 ---
 
@@ -126,6 +127,16 @@ memctl search "<task>"      # find relevant prior decisions
 
 Auto-detect: walks up from cwd for `.memctl/.obsidian/`. Per-project wins over `MEMCTL_SHARED_VAULT`.
 Shared vault: `export MEMCTL_SHARED_VAULT=$HOME/memctl-personal/.memctl`
+
+**Git — what to ignore:** Only ignore the runtime index, NOT the vault notes:
+```
+# .gitignore — correct
+.memctl-vault/.obsidian/memctl/   ← index.db + embeddings (binary, regenerable)
+
+# WRONG — never do this:
+.memctl-vault/                    ← ignores all notes, memory is lost
+```
+Vault `.md` files are project memory and MUST be committed. After a session: `git add .memctl-vault/ && git commit`.
 
 ---
 
@@ -187,6 +198,8 @@ Error: `"success": false, "data": null, "error": {"code": "...", "message": "...
 
 ## MCP mode
 
+MCP is the primary integration path for any AI tool (Cursor, Cline, VS Code MCP extension, Windsurf, etc.) — no plugin required, zero maintenance.
+
 ```bash
 memctl mcp              # auto-detects vault from cwd
 memctl mcp --vault <p>  # explicit override
@@ -195,6 +208,8 @@ memctl mcp --vault <p>  # explicit override
 MCP tools: search, search_semantic, search_tags, search_date, search_links, get, list, create, update, append, delete, set_weight, get_identity.
 
 Claude Code config (`~/.claude/claude_desktop_config.json`): `{"mcpServers": {"memctl": {"command": "memctl", "args": ["mcp"]}}}`.
+
+Other tools: same JSON structure — add to Cursor `~/.cursor/mcp.json`, Cline settings, or any MCP host config.
 
 ---
 
