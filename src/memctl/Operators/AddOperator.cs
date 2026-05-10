@@ -20,7 +20,8 @@ public sealed class AddOperator(IVaultReader vault, INoteIndex index, GemmaEmbed
         string? title,
         string[]? tags,
         string? fileName,
-        ILlmClient? llm)
+        ILlmClient? llm,
+        string? type = null)
     {
         if (!Directory.Exists(vaultPath))
             vault.InitVaultStructure(vaultPath);
@@ -55,6 +56,7 @@ public sealed class AddOperator(IVaultReader vault, INoteIndex index, GemmaEmbed
             Content  = content,
             Tags     = resolvedTags,
             Links    = resolvedLinks,
+            Type     = type?.ToLowerInvariant(),
             Created  = DateTime.UtcNow,
             Modified = DateTime.UtcNow,
         };

@@ -31,6 +31,8 @@ public sealed class ObsidianVaultReader : IVaultReader
         var created  = ParseDate(fm, "created",  fileInfo.CreationTimeUtc);
         var modified = ParseDate(fm, "modified", fileInfo.LastWriteTimeUtc);
         var archived = fm.TryGetValue("archived", out var fmArch) && fmArch is true;
+        var type     = fm.TryGetValue("type", out var fmType) ? fmType?.ToString()?.Trim().ToLowerInvariant() : null;
+        if (!Memctl.CoreAbstractions.Entities.NoteTypes.IsValid(type)) type = null; // ignore invalid silently
 
         return new Note
         {
@@ -40,6 +42,7 @@ public sealed class ObsidianVaultReader : IVaultReader
             Content  = body,
             Tags     = tags,
             Links    = links,
+            Type     = type,
             Created  = created,
             Modified = modified,
             Archived = archived,
@@ -101,6 +104,9 @@ public sealed class ObsidianVaultReader : IVaultReader
 
         if (note.Archived)
             sb.AppendLine("archived: true");
+
+        if (!string.IsNullOrEmpty(note.Type))
+            sb.AppendLine($"type: {note.Type}");
 
         if (note.Tags.Length > 0)
         {
