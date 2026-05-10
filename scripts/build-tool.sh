@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # build-tool.sh — builds dotnet tool nupkg for global install
-# Usage: bash build-tool.sh [version]
+# Usage: bash scripts/build-tool.sh [version]
 # Output: nupkg/memctl.{VERSION}.nupkg
 
 set -euo pipefail
 
 VERSION="${1:-$(git describe --tags --exact-match 2>/dev/null || git rev-parse --short HEAD 2>/dev/null || echo "dev")}"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SRC="$SCRIPT_DIR/src/memctl/memctl.csproj"
-OUT="$SCRIPT_DIR/nupkg"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SRC="$REPO_ROOT/src/memctl/memctl.csproj"
+OUT="$REPO_ROOT/nupkg"
 
 mkdir -p "$OUT"
 rm -f "$OUT"/memctl.*.nupkg

@@ -1,12 +1,12 @@
 # deploy.ps1 — build win-x64 self-contained binary and install to user PATH
-# Usage: .\deploy.ps1
+# Usage: .\scripts\deploy.ps1
 # If blocked: Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 $ErrorActionPreference = "Stop"
 
-$ScriptDir   = $PSScriptRoot
-$Project     = Join-Path $ScriptDir "src\memctl\memctl.csproj"
-$PublishOut  = Join-Path $ScriptDir "dist\win-x64"
+$RepoRoot    = Split-Path -Parent $PSScriptRoot
+$Project     = Join-Path $RepoRoot "src\memctl\memctl.csproj"
+$PublishOut  = Join-Path $RepoRoot "dist\win-x64"
 $SrcBin      = Join-Path $PublishOut "memctl.exe"
 $DestDir     = Join-Path $HOME ".local\bin"
 $DestBin     = Join-Path $DestDir "memctl.exe"

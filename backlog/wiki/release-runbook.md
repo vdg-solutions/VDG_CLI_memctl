@@ -29,33 +29,29 @@ sed -i "s|<Version>[^<]*</Version>|<Version>$NEW_VER</Version>|" src/memctl/memc
 sed -i "s|\"version\": \"[^\"]*\"|\"version\": \"$NEW_VER\"|" plugins/memctl-claude/.claude-plugin/plugin.json
 ```
 
-### 2. Sync skill (if `docs/memctl.md` changed since last release)
-
-```bash
-bash scripts/sync-skill-to-plugin.sh
-```
-
-### 3. Verify build clean locally
+### 2. Verify build clean locally
 
 ```bash
 dotnet build src/memctl/memctl.csproj -c Release --nologo -v q
 dotnet test --nologo
 ```
 
-### 4. Commit, tag, push
+### 3. Commit, tag, push
 
 ```bash
-git add src/memctl/memctl.csproj plugins/memctl-claude/.claude-plugin/plugin.json plugins/memctl-claude/skills/memctl/SKILL.md
+git add src/memctl/memctl.csproj plugins/memctl-claude/.claude-plugin/plugin.json
 git commit -m "release: v$NEW_VER"
 git tag -a "v$NEW_VER" -m "v$NEW_VER"
 git push origin main "v$NEW_VER"
 ```
 
-### 5. Marketplace sync (automated)
+`docs/memctl.md` is the single source of truth for the skill doc — edit it normally and CI propagates it to both `memctl-releases/SKILL.md` and `plugins/memctl-claude/skills/memctl/SKILL.md` on tag push. The plugin-side copy is not in this repo (pre-commit hook blocks re-adding it).
+
+### 4. Marketplace sync (automated)
 
 Handled by workflow `sync-marketplace` job — updates `vdg-solutions/claude-plugins/.claude-plugin/marketplace.json` plugin entry version. Skipped on pre-release tags (`v*-rc1`/`-beta1`/`-alpha`). No manual action needed.
 
-### 6. Monitor workflow
+### 5. Monitor workflow
 
 ```bash
 gh run watch --repo vdg-solutions/VDG_CLI_memctl
@@ -218,7 +214,7 @@ gh api repos/actions/checkout/git/refs/tags/v4.2.2 --jq .object.sha
 - **Don't commit sensitive files.** `.claude/settings.local.json`, `.claude/scheduled_tasks.lock` ignored in `.gitignore`.
 - **Don't bypass `verify-versions`.** Mismatched plugin/csproj versions break NFR-3 task #27.
 - **Don't paste PAT into chat.** Use env var or secret reference.
-- **Don't skip the skill sync** if `docs/memctl.md` changed — plugin distribution stale otherwise.
+- **Don't re-add `plugins/memctl-claude/skills/memctl/SKILL.md`** — it's CI-generated from `docs/memctl.md`; pre-commit hook blocks it.
 - **macOS-13 runner is gone.** Don't add it back without cross-team check.
 
 ---

@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # build-portable.sh — builds self-contained portable packages for all platforms
-# Usage: bash build-portable.sh [version]
+# Usage: bash scripts/build-portable.sh [version]
 # Output: dist/memctl-portable-<platform>-<version>.zip
 
 set -euo pipefail
 
 VERSION="${1:-$(git describe --tags --exact-match 2>/dev/null || git rev-parse --short HEAD 2>/dev/null || echo "dev")}"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SRC="$SCRIPT_DIR/src/memctl/memctl.csproj"
-SKILL="$SCRIPT_DIR/docs/memctl.md"
-DIST="$SCRIPT_DIR/dist"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SRC="$REPO_ROOT/src/memctl/memctl.csproj"
+SKILL="$REPO_ROOT/docs/memctl.md"
+DIST="$REPO_ROOT/dist"
 
 TARGETS=("win-x64" "linux-x64" "osx-arm64" "osx-x64")
 

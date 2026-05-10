@@ -41,7 +41,7 @@ These are **reference docs**, NOT `/sdlc` intake. `/sdlc` only picks up `backlog
 | `docs/designs/<id>-design.md` | Active task design (during /sdlc pipeline) |
 | `docs/retros/<id>-retro.md` | Active task retro (during /sdlc Phase 6) |
 | `docs/archives/{specs,designs,retros}/` | **Frozen** historical SDLC artifacts (post-Done) — see [archive README](../../docs/archives/README.md) |
-| `docs/memctl.md` | Skill source of truth (synced to plugin via `scripts/sync-skill-to-plugin.sh`, synced to public memctl-releases SKILL.md via release workflow) |
+| `docs/memctl.md` | Skill source of truth — edit here only. Release workflow propagates to `memctl-releases/SKILL.md` and `plugins/memctl-claude/skills/memctl/SKILL.md` (the latter is not tracked in this repo). |
 | `docs/refs/articles/` | External research references |
 
 `docs/specs|designs|retros/` are **frozen historical artifacts** — they document what was true at task ship time. They may contain stale paths/refs; don't bulk-update unless task is reopened. Per [backlog-conventions.md](backlog-conventions.md), Done items can be edited for wrong snippets that would mislead future bots, but per-task SDLC artifacts are append-only history.
