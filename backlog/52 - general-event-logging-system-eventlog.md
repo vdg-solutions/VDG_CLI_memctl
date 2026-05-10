@@ -2,7 +2,7 @@
 id: 52
 type: feature
 title: General event logging system (EventLog)
-status: In Review
+status: Done
 priority: normal
 created: 2026-05-08
 updated: 2026-05-08
@@ -23,3 +23,5 @@ General event logging system (EventLog)
 **2026-05-08 17:50 user:** Phase 3 complete: Build score 5/5, 1 QC loop (assertion count fix). 114/114 tests pass. Smoke 1+2 green. Moving to QC.
 
 **2026-05-08 17:50 user:** Phase 4 complete: QC score 5/5. 11/11 EventLogWiring tests pass. All 114 tests green. Proceeding to PR + review.
+
+**2026-05-08 17:51 user:** Phase 6 complete: merged to main. 114/114 tests. Score 5/5.
