@@ -349,7 +349,6 @@ healthchecksdb
 MigrationBackup/
 
 dist/
-.memctl/
 obf/
 tools/
 
@@ -363,4 +362,4 @@ tools/
 .claude/scheduled_tasks.lock
 .archived-v1-vault/
 
-.memctl-vault/.obsidian/memctl/
+.memctl/.obsidian/memctl/
