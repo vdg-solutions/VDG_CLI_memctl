@@ -57,4 +57,31 @@ public class ValidateTests
         var errs = r.Validate();
         Assert.Contains(errs, e => e.StartsWith("text:"));
     }
+
+    [Theory]
+    [InlineData("user")]
+    [InlineData("feedback")]
+    [InlineData("project")]
+    [InlineData("reference")]
+    [InlineData(null)]
+    public void AddNote_valid_type(string? type)
+    {
+        var r = new AddNoteRequest { Text = "x", Type = type };
+        Assert.Empty(r.Validate());
+    }
+
+    [Fact]
+    public void AddNote_invalid_type()
+    {
+        var r = new AddNoteRequest { Text = "x", Type = "wrongtype" };
+        var errs = r.Validate();
+        Assert.Contains(errs, e => e.StartsWith("type:"));
+    }
+
+    [Fact]
+    public void AddNote_type_caseInsensitive()
+    {
+        var r = new AddNoteRequest { Text = "x", Type = "Feedback" };
+        Assert.Empty(r.Validate());
+    }
 }

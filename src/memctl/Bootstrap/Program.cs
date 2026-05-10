@@ -125,12 +125,14 @@ var addTextArg    = new Argument<string?>("text", () => null, "Note content (or 
 var addContentOpt = new Option<string?>("--content", "Note content (alias for positional <text>)");
 var addTitleOpt   = new Option<string?>("--title", "Note title (auto-extracted if omitted)");
 var addTagsOpt    = new Option<string?>("--tags",  "Comma-separated tags");
+var addTypeOpt    = new Option<string?>("--type",  "Memory type: user|feedback|project|reference (Claude-Code-compat)");
 var addFileOpt    = new Option<string?>("--file",  "Output filename (e.g. notes/crypto.md)");
 var addCmd = new Command("add", "Add a new note to vault");
 addCmd.AddArgument(addTextArg);
 addCmd.AddOption(addContentOpt);
 addCmd.AddOption(addTitleOpt);
 addCmd.AddOption(addTagsOpt);
+addCmd.AddOption(addTypeOpt);
 addCmd.AddOption(addFileOpt);
 addCmd.SetHandler(async ctx =>
 {
@@ -150,6 +152,7 @@ addCmd.SetHandler(async ctx =>
         Text  = text,
         Title = pr.GetValueForOption(addTitleOpt),
         Tags  = pr.GetValueForOption(addTagsOpt)?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+        Type  = pr.GetValueForOption(addTypeOpt),
         File  = pr.GetValueForOption(addFileOpt),
     };
     if (RequestValidator.Validate(req, "add") is { } badReq)
@@ -160,7 +163,7 @@ addCmd.SetHandler(async ctx =>
     }
     var emb     = await GetEmbedding(g);
     var op      = new AddOperator(vaultReader, noteIndex, emb);
-    var outcome = await op.ExecuteAsync(vault, req.Text, req.Title, req.Tags, req.File, LlmClient(g));
+    var outcome = await op.ExecuteAsync(vault, req.Text, req.Title, req.Tags, req.File, LlmClient(g), req.Type);
     ResultPrinter.Print(outcome);
     ctx.ExitCode = outcome.Success ? 0 : 1;
 });
