@@ -45,6 +45,7 @@ jobs:
           - { os: windows-latest, rid: win-x64,   ext: .exe, archive: zip }
           - { os: ubuntu-latest,  rid: linux-x64, ext: '',   archive: tar }
           - { os: macos-latest,   rid: osx-arm64, ext: '',   archive: tar }
+          - { os: macos-latest,   rid: osx-x64,   ext: '',   archive: tar }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -104,8 +105,50 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
+  # Combine the two mac per-arch builds into a single universal-lipo'd asset that Electron's
+  # universal-builder accepts (#510-mac-CI: arm64-only asset failed electron-builder's identical-
+  # file check; a fat Mach-O passes since it's truly universal). Repackages as
+  # memctl-osx-universal-VER.tar.gz; release job uploads it alongside the per-arch assets.
+  mac-universal:
+    needs: build
+    runs-on: macos-latest
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with: { name: memctl-osx-arm64, path: arm64 }
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with: { name: memctl-osx-x64,   path: x64 }
+      - name: Lipo into universal
+        shell: bash
+        run: |
+          set -euo pipefail
+          VER="${GITHUB_REF_NAME#v}"
+          mkdir -p arm64-x x64-x universal
+          tar -xzf "arm64/memctl-osx-arm64-${VER}.tar.gz" -C arm64-x
+          tar -xzf "x64/memctl-osx-x64-${VER}.tar.gz"     -C x64-x
+          # Walk arm64 tree: for each file that exists in BOTH and is Mach-O, lipo into a fat
+          # binary; for files identical across arches (READMEs, SKILL.md) just copy from arm64.
+          cd arm64-x
+          find . -type f | while read -r f; do
+            mkdir -p "../universal/$(dirname "$f")"
+            if [ -f "../x64-x/$f" ] && file "$f" | grep -q 'Mach-O'; then
+              lipo -create "$f" "../x64-x/$f" -output "../universal/$f" 2>/dev/null || cp -p "$f" "../universal/$f"
+              chmod --reference="$f" "../universal/$f" 2>/dev/null || true
+            else
+              cp -p "$f" "../universal/$f"
+            fi
+          done
+          cd ../universal
+          tar -czf "../memctl-osx-universal-${VER}.tar.gz" .
+          ls -la "../memctl-osx-universal-${VER}.tar.gz"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: memctl-osx-universal
+          path: memctl-osx-universal-*.tar.gz
+          retention-days: 7
+          if-no-files-found: error
+
   release:
-    needs: [build]
+    needs: [build, mac-universal]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
