@@ -254,6 +254,23 @@ searchCmd.SetHandler(async ctx =>
 });
 root.AddCommand(searchCmd);
 
+// --- elevate (#595) — move note from source vault to target vault (memory cascade pyramid) ---
+var elevateIdArg     = new Argument<string>("note_id", "Note ID to elevate from source vault");
+var elevateTargetOpt = new Option<string>("--to-vault", "Target vault path (the upper cascade layer)") { IsRequired = true };
+var elevateCmd       = new Command("elevate", "Elevate a note from this vault to an upper cascade layer vault (Layer 1 -> 2 or 2 -> 3)");
+elevateCmd.AddArgument(elevateIdArg);
+elevateCmd.AddOption(elevateTargetOpt);
+elevateCmd.SetHandler(ctx =>
+{
+    var g = G(ctx);
+    if (RequireVault(g, ctx) is not { } vault) return;
+    var noteId = ctx.ParseResult.GetValueForArgument(elevateIdArg);
+    var target = ctx.ParseResult.GetValueForOption(elevateTargetOpt)!;
+    var op     = new ElevateOperator(vaultReader, noteIndex);
+    ResultPrinter.Print(op.Execute(vault, target, noteId));
+});
+root.AddCommand(elevateCmd);
+
 // --- search-semantic ---
 var semQueryArg  = new Argument<string>("query");
 var semScopeOpt  = new Option<string?>("--scope",  "Comma-separated note IDs to restrict search");
