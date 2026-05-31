@@ -13,30 +13,7 @@ env:
   RELEASE_REPO: vdg-solutions/memctl-releases
 
 jobs:
-  verify-versions:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - name: Compare tag/csproj/plugin versions
-        shell: bash
-        run: |
-          TAG_VER="${GITHUB_REF_NAME#v}"
-          BASE_VER="${TAG_VER%%-*}"
-          CSPROJ_VER=$(grep -oE '<Version>[^<]+' src/memctl/memctl.csproj | sed 's|<Version>||')
-          PLUGIN_VER=$(python3 -c "import json; print(json.load(open('plugins/memctl-claude/.claude-plugin/plugin.json'))['version'])")
-
-          echo "tag=$TAG_VER base=$BASE_VER csproj=$CSPROJ_VER plugin=$PLUGIN_VER"
-
-          if [ "$CSPROJ_VER" != "$BASE_VER" ]; then
-            echo "::error::csproj <Version> $CSPROJ_VER != tag base $BASE_VER"; exit 1
-          fi
-          if [ "$PLUGIN_VER" != "$BASE_VER" ]; then
-            echo "::error::plugin.json version $PLUGIN_VER != tag base $BASE_VER"; exit 1
-          fi
-          echo "::notice::version sync verified — $BASE_VER"
-
   build:
-    needs: verify-versions
     name: build-${{ matrix.rid }}
     strategy:
       fail-fast: false
@@ -53,6 +30,37 @@ jobs:
       - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: '10.x'
+
+      - name: Sync version from tag
+        shell: bash
+        run: |
+          # Owner directive 2026-05-31: CI/CD takes the tag as the single source of truth and
+          # writes the version into csproj + plugin.json on the fly. Releaser only bumps the tag.
+          VER="${GITHUB_REF_NAME#v}"
+          BASE_VER="${VER%%-*}"
+          echo "Syncing version to $BASE_VER (from tag $GITHUB_REF_NAME)"
+
+          # csproj <Version> — works on every platform, no sed-i portability issue
+          python3 -c "
+          import re, pathlib
+          p = pathlib.Path('src/memctl/memctl.csproj')
+          src = p.read_text()
+          new = re.sub(r'<Version>[^<]*</Version>', f'<Version>${BASE_VER}</Version>', src)
+          p.write_text(new)
+          "
+
+          # plugin.json version
+          python3 -c "
+          import json, pathlib
+          p = pathlib.Path('plugins/memctl-claude/.claude-plugin/plugin.json')
+          d = json.loads(p.read_text())
+          d['version'] = '${BASE_VER}'
+          p.write_text(json.dumps(d, indent=2) + '\n')
+          "
+
+          # Verify
+          grep -E '<Version>' src/memctl/memctl.csproj
+          python3 -c "import json; print('plugin.json:', json.load(open('plugins/memctl-claude/.claude-plugin/plugin.json'))['version'])"
 
       - name: Restore
         run: dotnet restore ${{ env.PROJECT }}
