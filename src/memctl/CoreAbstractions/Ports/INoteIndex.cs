@@ -12,6 +12,9 @@ public interface INoteIndex : IDisposable
     IReadOnlyList<Note> GetAll(bool includeArchived = false);
     IReadOnlyList<SearchHit> SearchBm25(string query, int limit, string? folderPrefix = null);
     IReadOnlyList<SearchHit> SearchSemantic(float[] queryEmbedding, int limit, IReadOnlyList<string>? scopeIds = null, string? folderPrefix = null);
+    // Hybrid retrieval: runs SearchBm25 + SearchSemantic and fuses results via Reciprocal Rank Fusion.
+    // Each list contributes 1/(RrfK + rank) per shared hit; results sorted by combined score desc.
+    IReadOnlyList<SearchHit> SearchHybrid(string query, float[] queryEmbedding, int limit, string? folderPrefix = null);
     IReadOnlyList<Note> SearchByTags(string[] tags, bool matchAll, int limit);
     IReadOnlyList<Note> SearchByDate(DateTime? from, DateTime? to, int limit);
     IReadOnlyList<Note> GetLinked(string noteId, int depth);

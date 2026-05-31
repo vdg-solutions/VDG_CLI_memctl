@@ -29,8 +29,8 @@ public sealed class SqliteNoteIndex : INoteIndex
         // weight + archived set on INSERT only — preserve user-set values on re-ingest
         var arch = note.Archived ? 1 : 0;
         Exec(@"
-            INSERT INTO notes (id, file_path, title, content, tags, links, created_at, modified_at, embedding, weight, archived)
-            VALUES (@id, @fp, @title, @content, @tags, @links, @created, @modified, @emb, @weight, @arch)
+            INSERT INTO notes (id, file_path, title, content, tags, links, created_at, modified_at, embedding, weight, archived, tier)
+            VALUES (@id, @fp, @title, @content, @tags, @links, @created, @modified, @emb, @weight, @arch, @tier)
             ON CONFLICT(id) DO UPDATE SET
                 file_path   = excluded.file_path,
                 title       = excluded.title,
@@ -38,7 +38,8 @@ public sealed class SqliteNoteIndex : INoteIndex
                 tags        = excluded.tags,
                 links       = excluded.links,
                 modified_at = excluded.modified_at,
-                embedding   = excluded.embedding",
+                embedding   = excluded.embedding,
+                tier        = excluded.tier",
             ("@id",      note.Id),
             ("@fp",      note.FilePath),
             ("@title",   note.Title),
@@ -49,7 +50,8 @@ public sealed class SqliteNoteIndex : INoteIndex
             ("@modified",note.Modified.ToString("O")),
             ("@emb",     (object?)embeddingBytes ?? DBNull.Value),
             ("@weight",  note.Weight),
-            ("@arch",    arch));
+            ("@arch",    arch),
+            ("@tier",    (object?)note.Tier ?? DBNull.Value));
     }
 
     public void Delete(string noteId) =>
@@ -110,6 +112,42 @@ public sealed class SqliteNoteIndex : INoteIndex
             });
         }
         return hits;
+    }
+
+    // Standard RRF constant (TREC Deep Learning track). Small enough that early ranks dominate.
+    private const int RrfK = 60;
+    // Per-component fetch is wider than the hybrid `limit` so the fusion has overlap to score.
+    // 3x limit is the same heuristic TencentDB-Agent-Memory uses for L1 RRF.
+    private const int HybridFetchMultiplier = 3;
+
+    public IReadOnlyList<SearchHit> SearchHybrid(string query, float[] queryEmbedding, int limit, string? folderPrefix = null)
+    {
+        var fetch  = Math.Max(limit, limit * HybridFetchMultiplier);
+        var bm25   = SearchBm25(query, fetch, folderPrefix);
+        var sem    = SearchSemantic(queryEmbedding, fetch, scopeIds: null, folderPrefix: folderPrefix);
+
+        var fused = new Dictionary<string, (Note Note, float Score, string? Snippet)>(StringComparer.OrdinalIgnoreCase);
+
+        for (var i = 0; i < bm25.Count; i++)
+        {
+            var h     = bm25[i];
+            var score = 1f / (RrfK + (i + 1));
+            fused[h.Note.Id] = (h.Note, score, h.Snippet);
+        }
+        for (var i = 0; i < sem.Count; i++)
+        {
+            var h     = sem[i];
+            var score = 1f / (RrfK + (i + 1));
+            if (fused.TryGetValue(h.Note.Id, out var existing))
+                fused[h.Note.Id] = (existing.Note, existing.Score + score, existing.Snippet ?? h.Snippet);
+            else
+                fused[h.Note.Id] = (h.Note, score, h.Snippet);
+        }
+
+        return [.. fused.Values
+            .OrderByDescending(v => v.Score)
+            .Take(limit)
+            .Select(v => new SearchHit { Note = v.Note, Score = v.Score, Snippet = v.Snippet })];
     }
 
     public IReadOnlyList<SearchHit> SearchSemantic(float[] queryEmbedding, int limit, IReadOnlyList<string>? scopeIds = null, string? folderPrefix = null)
@@ -344,6 +382,7 @@ public sealed class SqliteNoteIndex : INoteIndex
         MigrateAddColumn("access_count",    "INTEGER NOT NULL DEFAULT 0");
         MigrateAddColumn("archived",        "INTEGER NOT NULL DEFAULT 0");
         MigrateAddColumn("last_weight_set", "TEXT");
+        MigrateAddColumn("tier",            "TEXT");    // null = pre-tier note; L0|L1|L2|L3 per NoteTiers
     }
 
     private void MigrateAddColumn(string column, string definition)
@@ -431,6 +470,14 @@ public sealed class SqliteNoteIndex : INoteIndex
         }
         catch { /* column absent in legacy schema — ignored */ }
 
+        string? tier = null;
+        try
+        {
+            var tierCol = r.GetOrdinal("tier");
+            if (!r.IsDBNull(tierCol)) tier = r.GetString(tierCol);
+        }
+        catch { /* column absent in legacy schema (pre-#597) — null tier = treated as L0 */ }
+
         return new Note
         {
             Id            = r.GetString(r.GetOrdinal("id")),
@@ -446,6 +493,7 @@ public sealed class SqliteNoteIndex : INoteIndex
             AccessCount   = r.IsDBNull(accessCountCol) ? 0    : r.GetInt32(accessCountCol),
             Archived      = archived,
             LastWeightSet = lastWeightSet,
+            Tier          = tier,
         };
     }
 
