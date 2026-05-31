@@ -33,6 +33,9 @@ public sealed class ObsidianVaultReader : IVaultReader
         var archived = fm.TryGetValue("archived", out var fmArch) && fmArch is true;
         var type     = fm.TryGetValue("type", out var fmType) ? fmType?.ToString()?.Trim().ToLowerInvariant() : null;
         if (!Memctl.CoreAbstractions.Entities.NoteTypes.IsValid(type)) type = null; // ignore invalid silently
+        // #597 — abstraction tier from frontmatter (L0|L1|L2|L3), null = pre-tier note
+        var tier = fm.TryGetValue("tier", out var fmTier) ? fmTier?.ToString()?.Trim().ToUpperInvariant() : null;
+        if (!Memctl.CoreAbstractions.Entities.NoteTiers.IsValid(tier)) tier = null;
 
         return new Note
         {
@@ -46,6 +49,7 @@ public sealed class ObsidianVaultReader : IVaultReader
             Created  = created,
             Modified = modified,
             Archived = archived,
+            Tier     = tier,
         };
     }
 
@@ -107,6 +111,9 @@ public sealed class ObsidianVaultReader : IVaultReader
 
         if (!string.IsNullOrEmpty(note.Type))
             sb.AppendLine($"type: {note.Type}");
+
+        if (!string.IsNullOrEmpty(note.Tier))
+            sb.AppendLine($"tier: {note.Tier}");
 
         if (note.Tags.Length > 0)
         {
