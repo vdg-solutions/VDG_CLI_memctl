@@ -88,6 +88,42 @@ public sealed class ElevateOperator(IVaultReader vaultReader, INoteIndex sourceI
             $"elevated '{noteId}' from '{sourceVaultPath}' -> '{targetAbsPath}'");
     }
 
+    // Batch helper used by the maintenance scheduler: enumerate all non-archived notes in the
+    // source vault, pick those whose weight >= minWeight and age >= minAgeDays, elevate each.
+    // Single-call atomic batch — avoids the scheduler having to round-trip per note (memctl list
+    // -> filter -> memctl elevate). Returns Ok with a summary message even when no candidates
+    // qualified (count=0 is a valid no-op, not an error).
+    public MemctlOutcome ExecuteAuto(string sourceVaultPath, string targetVaultPath, float minWeight, int minAgeDays)
+    {
+        if (string.IsNullOrWhiteSpace(sourceVaultPath))
+            return MemctlOutcome.Fail("elevate-auto", "sourceVaultPath is required");
+        if (string.IsNullOrWhiteSpace(targetVaultPath))
+            return MemctlOutcome.Fail("elevate-auto", "targetVaultPath is required");
+        if (PathsEqual(sourceVaultPath, targetVaultPath))
+            return MemctlOutcome.Fail("elevate-auto", "source and target vault are the same");
+
+        sourceIndex.Initialize(IngestOperator.DbPath(sourceVaultPath));
+        var cutoff     = DateTime.UtcNow.AddDays(-minAgeDays);
+        var candidates = sourceIndex.GetAll(includeArchived: false)
+            .Where(n => n.Weight >= minWeight && n.Modified <= cutoff)
+            .ToList();
+
+        if (candidates.Count == 0)
+            return MemctlOutcome.Ok("elevate-auto",
+                $"no candidates (min weight {minWeight}, min age {minAgeDays}d) in '{sourceVaultPath}'");
+
+        var elevated = 0;
+        var failed   = 0;
+        foreach (var note in candidates)
+        {
+            var outcome = Execute(sourceVaultPath, targetVaultPath, note.Id);
+            if (outcome.Success) elevated++; else failed++;
+        }
+
+        return MemctlOutcome.Ok("elevate-auto",
+            $"elevated {elevated}/{candidates.Count} notes ({failed} failed) from '{sourceVaultPath}' -> '{targetVaultPath}'");
+    }
+
     private static string AppendElevationHeader(string body, string sourceVault, string sourceRelPath)
     {
         var header = $"<!-- elevated_from: {sourceVault}/{sourceRelPath} at {DateTime.UtcNow:O} -->\n\n";

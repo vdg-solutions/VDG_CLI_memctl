@@ -271,6 +271,26 @@ elevateCmd.SetHandler(ctx =>
 });
 root.AddCommand(elevateCmd);
 
+// --- elevate-auto (#595) — batch elevate by weight + age threshold (used by maintenance scheduler) ---
+var elevateAutoTargetOpt    = new Option<string>("--to-vault",     "Target vault path (the upper cascade layer)") { IsRequired = true };
+var elevateAutoMinWeightOpt = new Option<float> ("--min-weight",   "Minimum note weight to qualify for elevation") { IsRequired = true };
+var elevateAutoMinAgeOpt    = new Option<int>   ("--min-age-days", "Minimum age in days (Modified) for the note to qualify") { IsRequired = true };
+var elevateAutoCmd          = new Command("elevate-auto", "Batch elevate notes whose weight >= --min-weight and age >= --min-age-days from this vault to --to-vault");
+elevateAutoCmd.AddOption(elevateAutoTargetOpt);
+elevateAutoCmd.AddOption(elevateAutoMinWeightOpt);
+elevateAutoCmd.AddOption(elevateAutoMinAgeOpt);
+elevateAutoCmd.SetHandler(ctx =>
+{
+    var g = G(ctx);
+    if (RequireVault(g, ctx) is not { } vault) return;
+    var target    = ctx.ParseResult.GetValueForOption(elevateAutoTargetOpt)!;
+    var minWeight = ctx.ParseResult.GetValueForOption(elevateAutoMinWeightOpt);
+    var minAge    = ctx.ParseResult.GetValueForOption(elevateAutoMinAgeOpt);
+    var op        = new ElevateOperator(vaultReader, noteIndex);
+    ResultPrinter.Print(op.ExecuteAuto(vault, target, minWeight, minAge));
+});
+root.AddCommand(elevateAutoCmd);
+
 // --- search-semantic ---
 var semQueryArg  = new Argument<string>("query");
 var semScopeOpt  = new Option<string?>("--scope",  "Comma-separated note IDs to restrict search");
